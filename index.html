@@ -6,6 +6,7 @@
     <title>نظام إدارة المصنع المتكامل - مصنع أحمد العاروري</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* جميع الأنماط كما هي دون تغيير */
         * {
             box-sizing: border-box;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1347,7 +1348,11 @@
             <div class="invoice-header">
                 <div class="invoice-info">
                     <div><strong>رقم الفاتورة:</strong> <span id="invoice-number">INV-2024-001</span></div>
-                    <div><strong>التاريخ الميلادي:</strong> <span id="invoice-date"></span></div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <div><strong>التاريخ الميلادي:</strong> <span id="invoice-date"></span></div>
+                        <input type="date" id="invoice-date-input" style="width: auto; padding: 5px;" value="">
+                        <button class="btn" id="update-date-btn" style="width: auto; padding: 5px 10px;"><i class="fas fa-sync-alt"></i> تحديث التاريخ</button>
+                    </div>
                     <div><strong>التاريخ الهجري:</strong> <span id="hijri-date"></span></div>
                 </div>
                 <div class="company-info">
@@ -2099,28 +2104,6 @@
         // كلمة المرور لحذف العملاء والفواتير
         const DELETE_PASSWORD = "12345678";
         
-        // تعيين التواريخ
-        document.getElementById('invoice-date').textContent = new Date().toLocaleDateString('en-US');
-        
-        // دالة بسيطة لحساب التاريخ الهجري (تقريبي)
-        function getHijriDate() {
-            const today = new Date();
-            const hijri = new Intl.DateTimeFormat('ar-TN-u-ca-islamic', {
-                day: 'numeric',
-                month: 'long', 
-                year: 'numeric'
-            }).format(today);
-            return hijri;
-        }
-        
-        document.getElementById('hijri-date').textContent = getHijriDate();
-        
-        // قائمة المنتجات الأساسية
-        const baseProducts = [
-            "زوايا", "تركات", "امقاا", "امقا", "سي شانل", "ستاد", "زاويه الظل",
-            "ألواح جبسمبورد أبيض", "ألواح جبسمبورد أخضر", "بضائع أخوة متنوعة"
-        ];
-        
         // متغيرات النظام
         let productCount = 0;
         let clients = JSON.parse(localStorage.getItem('clients')) || [];
@@ -2136,6 +2119,54 @@
         // متغيرات التقسيم للتقارير
         let currentSalesPage = 1;
         const salesPerPage = 10;
+        
+        // قائمة المنتجات الأساسية
+        const baseProducts = [
+            "زوايا", "تركات", "امقاا", "امقا", "سي شانل", "ستاد", "زاويه الظل",
+            "ألواح جبسمبورد أبيض", "ألواح جبسمبورد أخضر", "بضائع أخوة متنوعة"
+        ];
+        
+        // تعيين التواريخ الافتراضية
+        function setDefaultDates() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            document.getElementById('invoice-date-input').value = `${year}-${month}-${day}`;
+            updateDatesFromInput();
+        }
+        
+        // دالة لتحديث التواريخ من حقل الإدخال
+        function updateDatesFromInput() {
+            const dateInput = document.getElementById('invoice-date-input').value;
+            if (dateInput) {
+                const selectedDate = new Date(dateInput + 'T12:00:00');
+                document.getElementById('invoice-date').textContent = selectedDate.toLocaleDateString('en-US');
+                document.getElementById('hijri-date').textContent = getHijriDateFromDate(selectedDate);
+            } else {
+                const today = new Date();
+                document.getElementById('invoice-date').textContent = today.toLocaleDateString('en-US');
+                document.getElementById('hijri-date').textContent = getHijriDateFromDate(today);
+            }
+        }
+        
+        // دالة لحساب التاريخ الهجري من تاريخ ميلادي معين
+        function getHijriDateFromDate(date) {
+            try {
+                return new Intl.DateTimeFormat('ar-TN-u-ca-islamic', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                }).format(date);
+            } catch (e) {
+                return 'غير متاح';
+            }
+        }
+        
+        // دالة بسيطة لحساب التاريخ الهجري (للتوافق مع الكود القديم)
+        function getHijriDate() {
+            return getHijriDateFromDate(new Date());
+        }
         
         // تحديث لوحة التحكم
         function updateDashboard() {
@@ -2191,10 +2222,8 @@
                 this.classList.add('active');
                 document.getElementById(this.getAttribute('data-report') + '-report').classList.add('active');
                 
-                // إعادة تعيين الصفحة الحالية
                 currentSalesPage = 1;
                 
-                // تحديث التقرير المحدد
                 if (this.getAttribute('data-report') === 'daily') {
                     loadDailyReport();
                 } else if (this.getAttribute('data-report') === 'weekly') {
@@ -2206,6 +2235,9 @@
                 }
             });
         });
+        
+        // ربط زر تحديث التاريخ
+        document.getElementById('update-date-btn').addEventListener('click', updateDatesFromInput);
         
         // إضافة منتج جديد
         document.getElementById('add-product').addEventListener('click', function() {
@@ -2220,15 +2252,10 @@
         
         // طباعة الفاتورة
         document.getElementById('print-invoice').addEventListener('click', function() {
-            // تحديث التواريخ قبل الطباعة
-            document.getElementById('invoice-date').textContent = new Date().toLocaleDateString('en-US');
-            document.getElementById('hijri-date').textContent = getHijriDate();
-            
-            // تحديث وقت الطباعة
+            updateDatesFromInput();
             const now = new Date();
             const timeString = now.toLocaleTimeString('ar-EG');
             document.getElementById('print-time').textContent = `وقت الطباعة: ${timeString}`;
-            
             window.print();
         });
         
@@ -2443,8 +2470,9 @@
             printReport('annual');
         });
         
-        // إضافة صف منتج أولي عند تحميل الصفحة
+        // عند تحميل الصفحة
         window.addEventListener('DOMContentLoaded', function() {
+            setDefaultDates();
             addProductRow();
             loadClientsList();
             loadInvoicesHistory();
@@ -2454,6 +2482,206 @@
             updateDashboard();
         });
         
+        // دالة لحذف سجلات المشتريات المرتبطة بفاتورة معينة
+        function deletePurchaseHistoryByInvoiceId(invoiceId) {
+            purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== invoiceId);
+            localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+        }
+
+        // دالة معدلة لإضافة المنتجات إلى سجل المشتريات
+        function addToPurchaseHistory(productName, quantity, price, clientName, invoiceId) {
+            const purchase = {
+                id: Date.now().toString() + Math.random(),
+                date: new Date().toISOString(),
+                productName,
+                quantity,
+                price,
+                total: quantity * price,
+                clientName,
+                invoiceId: invoiceId
+            };
+            purchaseHistory.push(purchase);
+            localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+        }
+
+        // دالة حفظ الفاتورة المعدلة
+        function saveInvoice() {
+            const clientName = document.getElementById('client-name').value;
+            const clientAddress = document.getElementById('client-address').value;
+            const clientPhone = document.getElementById('client-phone').value;
+            
+            if (!clientName) {
+                showNotification('يرجى إدخال اسم العميل', 'error');
+                return;
+            }
+            
+            const productsData = [];
+            const rows = document.querySelectorAll('#products-body tr');
+            rows.forEach(row => {
+                const productName = row.querySelector('.product-name').value;
+                const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+                const price = parseFloat(row.querySelector('.price').value) || 0;
+                const discount = parseFloat(row.querySelector('.discount').value) || 0;
+                const total = parseFloat(row.querySelector('.total').textContent) || 0;
+                
+                if (productName && quantity > 0 && price > 0) {
+                    productsData.push({ productName, quantity, price, discount, total });
+                }
+            });
+            
+            if (productsData.length === 0) {
+                showNotification('يرجى إضافة منتجات إلى الفاتورة', 'error');
+                return;
+            }
+            
+            let paymentData = {};
+            const grandTotal = parseFloat(document.getElementById('grand-total').textContent) || 0;
+            const previousBalance = parseFloat(document.getElementById('previous-balance').textContent) || 0;
+            const totalDue = grandTotal + previousBalance;
+            
+            if (document.getElementById('enable-multiple-payments').checked) {
+                const payments = [];
+                let totalPaid = 0;
+                document.querySelectorAll('.payment-row').forEach(row => {
+                    const method = row.querySelector('.payment-method-select').value;
+                    const amount = parseFloat(row.querySelector('.payment-amount').value) || 0;
+                    if (amount > 0) {
+                        payments.push({ method, amount });
+                        totalPaid += amount;
+                    }
+                });
+                paymentData = { type: 'multiple', payments, paidAmount: totalPaid, remainingBalance: totalDue - totalPaid };
+            } else {
+                const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
+                const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
+                paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: totalDue - paidAmount };
+            }
+            
+            const selectedDate = document.getElementById('invoice-date-input').value;
+            const invoiceDate = selectedDate ? new Date(selectedDate + 'T12:00:00').toISOString() : new Date().toISOString();
+            
+            const invoice = {
+                id: generateInvoiceId(),
+                date: invoiceDate,
+                client: { name: clientName, address: clientAddress, phone: clientPhone },
+                products: productsData,
+                subtotal: parseFloat(document.getElementById('subtotal').textContent) || 0,
+                totalDiscount: parseFloat(document.getElementById('total-discount').textContent) || 0,
+                totalTax: parseFloat(document.getElementById('total-tax').textContent) || 0,
+                grandTotal: grandTotal,
+                payment: paymentData,
+                status: paymentData.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة'
+            };
+            
+            productsData.forEach(product => {
+                addToPurchaseHistory(product.productName, product.quantity, product.price, clientName, invoice.id);
+            });
+            
+            invoices.push(invoice);
+            localStorage.setItem('invoices', JSON.stringify(invoices));
+            
+            updateClientBalance(clientName, paymentData.remainingBalance);
+            
+            showNotification('تم حفظ الفاتورة بنجاح');
+            
+            resetInvoiceForm();
+            
+            loadReports();
+            updateDashboard();
+        }
+
+        // دالة تعديل الفاتورة (معدلة)
+        function editInvoice(invoiceId) {
+            const invoiceIndex = invoices.findIndex(inv => inv.id === invoiceId);
+            if (invoiceIndex === -1) {
+                showNotification('لم يتم العثور على الفاتورة', 'error');
+                return;
+            }
+            
+            const invoice = invoices[invoiceIndex];
+            
+            // حذف سجلات المشتريات المرتبطة بهذه الفاتورة
+            deletePurchaseHistoryByInvoiceId(invoiceId);
+            
+            document.querySelector('.tab[data-tab="invoice"]').click();
+            
+            document.getElementById('client-name').value = invoice.client.name;
+            document.getElementById('client-address').value = invoice.client.address || '';
+            document.getElementById('client-phone').value = invoice.client.phone || '';
+            
+            const invoiceDate = new Date(invoice.date);
+            const year = invoiceDate.getFullYear();
+            const month = String(invoiceDate.getMonth() + 1).padStart(2, '0');
+            const day = String(invoiceDate.getDate()).padStart(2, '0');
+            document.getElementById('invoice-date-input').value = `${year}-${month}-${day}`;
+            updateDatesFromInput();
+            
+            document.getElementById('products-body').innerHTML = '';
+            productCount = 0;
+            invoice.products.forEach(product => {
+                addProductRow();
+                const lastRow = document.querySelector('#products-body tr:last-child');
+                lastRow.querySelector('.product-name').value = product.productName;
+                lastRow.querySelector('.quantity').value = product.quantity;
+                lastRow.querySelector('.price').value = product.price;
+                lastRow.querySelector('.discount').value = product.discount;
+                calculateRowTotal(lastRow);
+            });
+            
+            if (invoice.payment.type === 'multiple') {
+                document.getElementById('enable-multiple-payments').checked = true;
+                document.getElementById('multiple-payments-section').style.display = 'block';
+                document.getElementById('single-payment-section').style.display = 'none';
+                
+                document.getElementById('multiple-payments-section').innerHTML = '';
+                
+                invoice.payment.payments.forEach(payment => {
+                    const paymentRow = document.createElement('div');
+                    paymentRow.className = 'payment-row';
+                    paymentRow.innerHTML = `
+                        <select class="payment-method-select">
+                            <option value="cash" ${payment.method === 'cash' ? 'selected' : ''}>كاش</option>
+                            <option value="check" ${payment.method === 'check' ? 'selected' : ''}>شيكات</option>
+                            <option value="exchange" ${payment.method === 'exchange' ? 'selected' : ''}>تبديل بضائع</option>
+                            <option value="bank" ${payment.method === 'bank' ? 'selected' : ''}>تحويل بنكي</option>
+                        </select>
+                        <input type="number" class="payment-amount" placeholder="المبلغ" min="0" step="0.01" value="${payment.amount}">
+                        <button class="btn btn-danger remove-payment">
+                            <i class="fas fa-trash"></i> حذف
+                        </button>
+                    `;
+                    document.getElementById('multiple-payments-section').appendChild(paymentRow);
+                });
+                
+                const addButton = document.createElement('button');
+                addButton.className = 'btn';
+                addButton.id = 'add-payment-method';
+                addButton.innerHTML = '<i class="fas fa-plus"></i> إضافة طريقة دفع أخرى';
+                document.getElementById('multiple-payments-section').appendChild(addButton);
+                
+                const summaryDiv = document.createElement('div');
+                summaryDiv.className = 'payment-summary';
+                summaryDiv.innerHTML = `<strong>إجمالي المدفوع:</strong> <span id="total-paid">${invoice.payment.paidAmount.toFixed(2)}</span> دينار`;
+                document.getElementById('multiple-payments-section').appendChild(summaryDiv);
+                
+                setupMultiplePayments();
+            } else {
+                document.getElementById('enable-multiple-payments').checked = false;
+                document.getElementById('multiple-payments-section').style.display = 'none';
+                document.getElementById('single-payment-section').style.display = 'block';
+                document.querySelector(`input[name="payment-method"][value="${invoice.payment.method}"]`).checked = true;
+                document.getElementById('paid-amount').value = invoice.payment.paidAmount;
+            }
+            
+            calculateTotals();
+            updatePaymentBalance();
+            
+            invoices.splice(invoiceIndex, 1);
+            localStorage.setItem('invoices', JSON.stringify(invoices));
+            
+            showNotification('يمكنك الآن تعديل الفاتورة');
+        }
+
         // دالة لإعادة تعيين نموذج الفاتورة
         function resetInvoiceForm() {
             document.getElementById('products-body').innerHTML = '';
@@ -2466,8 +2694,8 @@
             updatePaymentBalance();
             productCount = 0;
             addProductRow();
+            setDefaultDates();
             
-            // إعادة تعيين الدفعات المتعددة
             document.getElementById('enable-multiple-payments').checked = false;
             document.getElementById('multiple-payments-section').style.display = 'none';
             document.getElementById('single-payment-section').style.display = 'block';
@@ -2496,7 +2724,6 @@
         
         // دالة لإعداد الدفعات المتعددة
         function setupMultiplePayments() {
-            // إضافة طريقة دفع جديدة
             document.getElementById('add-payment-method').addEventListener('click', function() {
                 const paymentSection = document.getElementById('multiple-payments-section');
                 const paymentRow = document.createElement('div');
@@ -2514,22 +2741,18 @@
                     </button>
                 `;
                 
-                // إدراج قبل زر الإضافة
                 paymentSection.insertBefore(paymentRow, this);
                 
-                // إضافة مستمع الحدث لحذف الصف
                 paymentRow.querySelector('.remove-payment').addEventListener('click', function() {
                     paymentRow.remove();
                     updateMultiplePaymentsTotal();
                 });
                 
-                // إضافة مستمع الحدث لتحديث المجموع
                 paymentRow.querySelector('.payment-amount').addEventListener('input', function() {
                     updateMultiplePaymentsTotal();
                 });
             });
             
-            // إضافة مستمعي الأحداث للصف الأول
             const firstPaymentRow = document.querySelector('.payment-row');
             if (firstPaymentRow) {
                 firstPaymentRow.querySelector('.remove-payment').addEventListener('click', function() {
@@ -2584,7 +2807,6 @@
             `;
             tbody.appendChild(row);
             
-            // إضافة مستمعي الأحداث لحساب القيم تلقائيًا
             const inputs = row.querySelectorAll('.quantity, .price, .discount, .product-name');
             inputs.forEach(input => {
                 input.addEventListener('input', function() {
@@ -2594,7 +2816,6 @@
                 });
             });
             
-            // إضافة مستمع الحدث لحذف المنتج
             row.querySelector('.remove-product').addEventListener('click', function() {
                 row.remove();
                 renumberRows();
@@ -2602,7 +2823,6 @@
                 updatePaymentBalance();
             });
             
-            // حساب القيم الأولية
             calculateRowTotal(row);
         }
         
@@ -2612,11 +2832,8 @@
             const price = parseFloat(row.querySelector('.price').value) || 0;
             const discount = parseFloat(row.querySelector('.discount').value) || 0;
             
-            // حساب السعر بعد الخصم (السعر شامل الضريبة)
             const discountAmount = (price * discount) / 100;
             const priceAfterDiscount = price - discountAmount;
-            
-            // حساب المجموع النهائي
             const total = priceAfterDiscount * quantity;
             
             row.querySelector('.total').textContent = total.toFixed(2);
@@ -2647,12 +2864,10 @@
                 const price = parseFloat(row.querySelector('.price').value) || 0;
                 const discount = parseFloat(row.querySelector('.discount').value) || 0;
                 
-                // حساب القيم
                 const rowSubtotal = price * quantity;
                 const discountAmount = (rowSubtotal * discount) / 100;
                 const priceAfterDiscount = rowSubtotal - discountAmount;
                 
-                // حساب الضريبة (16% مضمنة في السعر)
                 const taxRate = 16;
                 const taxAmount = (priceAfterDiscount * taxRate) / (100 + taxRate);
                 
@@ -2682,10 +2897,8 @@
             let paidAmount = 0;
             
             if (document.getElementById('enable-multiple-payments').checked) {
-                // استخدام الدفعات المتعددة
                 paidAmount = parseFloat(document.getElementById('total-paid').textContent) || 0;
             } else {
-                // استخدام الدفعة الواحدة
                 paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
             }
             
@@ -2700,147 +2913,11 @@
             }
         }
         
-        // دالة لحفظ الفاتورة
-        function saveInvoice() {
-            const clientName = document.getElementById('client-name').value;
-            const clientAddress = document.getElementById('client-address').value;
-            const clientPhone = document.getElementById('client-phone').value;
-            
-            if (!clientName) {
-                showNotification('يرجى إدخال اسم العميل', 'error');
-                return;
-            }
-            
-            // جمع بيانات المنتجات
-            const productsData = [];
-            const rows = document.querySelectorAll('#products-body tr');
-            rows.forEach(row => {
-                const productName = row.querySelector('.product-name').value;
-                const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
-                const price = parseFloat(row.querySelector('.price').value) || 0;
-                const discount = parseFloat(row.querySelector('.discount').value) || 0;
-                const total = parseFloat(row.querySelector('.total').textContent) || 0;
-                
-                if (productName && quantity > 0 && price > 0) {
-                    productsData.push({
-                        productName,
-                        quantity,
-                        price,
-                        discount,
-                        total
-                    });
-                    
-                    // إضافة إلى سجل المشتريات
-                    addToPurchaseHistory(productName, quantity, price, clientName);
-                }
-            });
-            
-            if (productsData.length === 0) {
-                showNotification('يرجى إضافة منتجات إلى الفاتورة', 'error');
-                return;
-            }
-            
-            // جمع بيانات الدفع
-            let paymentData = {};
-            const grandTotal = parseFloat(document.getElementById('grand-total').textContent) || 0;
-            const previousBalance = parseFloat(document.getElementById('previous-balance').textContent) || 0;
-            const totalDue = grandTotal + previousBalance;
-            
-            if (document.getElementById('enable-multiple-payments').checked) {
-                // استخدام الدفعات المتعددة
-                const payments = [];
-                let totalPaid = 0;
-                
-                document.querySelectorAll('.payment-row').forEach(row => {
-                    const method = row.querySelector('.payment-method-select').value;
-                    const amount = parseFloat(row.querySelector('.payment-amount').value) || 0;
-                    
-                    if (amount > 0) {
-                        payments.push({
-                            method: method,
-                            amount: amount
-                        });
-                        totalPaid += amount;
-                    }
-                });
-                
-                paymentData = {
-                    type: 'multiple',
-                    payments: payments,
-                    paidAmount: totalPaid,
-                    remainingBalance: totalDue - totalPaid
-                };
-            } else {
-                // استخدام الدفعة الواحدة
-                const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
-                const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
-                
-                paymentData = {
-                    type: 'single',
-                    method: paymentMethod,
-                    paidAmount: paidAmount,
-                    remainingBalance: totalDue - paidAmount
-                };
-            }
-            
-            // إنشاء الفاتورة
-            const invoice = {
-                id: generateInvoiceId(),
-                date: new Date().toISOString(),
-                client: {
-                    name: clientName,
-                    address: clientAddress,
-                    phone: clientPhone
-                },
-                products: productsData,
-                subtotal: parseFloat(document.getElementById('subtotal').textContent) || 0,
-                totalDiscount: parseFloat(document.getElementById('total-discount').textContent) || 0,
-                totalTax: parseFloat(document.getElementById('total-tax').textContent) || 0,
-                grandTotal: grandTotal,
-                payment: paymentData,
-                status: paymentData.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة'
-            };
-            
-            // حفظ الفاتورة
-            invoices.push(invoice);
-            localStorage.setItem('invoices', JSON.stringify(invoices));
-            
-            // تحديث رصيد العميل
-            updateClientBalance(clientName, paymentData.remainingBalance);
-            
-            showNotification('تم حفظ الفاتورة بنجاح');
-            
-            // إعادة تعيين الفاتورة
-            resetInvoiceForm();
-            
-            // تحديث التقارير واللوحة
-            loadReports();
-            updateDashboard();
-        }
-        
-        // دالة لإضافة المنتجات إلى سجل المشتريات
-        function addToPurchaseHistory(productName, quantity, price, clientName) {
-            const purchase = {
-                id: Date.now().toString(),
-                date: new Date().toISOString(),
-                productName,
-                quantity,
-                price,
-                total: quantity * price,
-                clientName,
-                invoiceId: generateInvoiceId() // ربط بسجل الفواتير
-            };
-            
-            purchaseHistory.push(purchase);
-            localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
-        }
-        
         // دالة لتحديث رصيد العميل
         function updateClientBalance(clientName, balanceChange) {
             let client = clients.find(c => c.name === clientName);
             
             if (!client) {
-                // إنشاء عميل جديد إذا لم يكن موجوداً
                 client = {
                     id: Date.now().toString(),
                     name: clientName,
@@ -2865,7 +2942,6 @@
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
             const time = String(now.getTime()).slice(-4);
-            
             return `INV-${year}${month}${day}-${time}`;
         }
         
@@ -2887,12 +2963,10 @@
                     document.getElementById('client-search').value = client.name;
                     autocompleteList.innerHTML = '';
                     
-                    // تعبئة بيانات العميل
                     document.getElementById('client-name').value = client.name;
                     document.getElementById('client-address').value = client.address || '';
                     document.getElementById('client-phone').value = client.phone || '';
                     
-                    // عرض رصيد العميل السابق
                     document.getElementById('previous-balance').textContent = (client.balance || 0).toFixed(2);
                     document.getElementById('client-balance-info').style.display = 'block';
                     
@@ -2914,12 +2988,10 @@
             const client = clients.find(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
             
             if (client) {
-                // تعبئة بيانات العميل
                 document.getElementById('client-name').value = client.name;
                 document.getElementById('client-address').value = client.address || '';
                 document.getElementById('client-phone').value = client.phone || '';
                 
-                // عرض رصيد العميل السابق
                 document.getElementById('previous-balance').textContent = (client.balance || 0).toFixed(2);
                 document.getElementById('client-balance-info').style.display = 'block';
                 
@@ -2942,7 +3014,6 @@
                 return;
             }
             
-            // التحقق من عدم وجود عميل بنفس الاسم
             if (clients.some(client => client.name === name)) {
                 showNotification('هناك عميل مسجل بنفس الاسم', 'error');
                 return;
@@ -2963,12 +3034,10 @@
             
             showNotification('تم حفظ العميل بنجاح');
             
-            // إعادة تعيين الحقول
             document.getElementById('new-client-name').value = '';
             document.getElementById('new-client-address').value = '';
             document.getElementById('new-client-phone').value = '';
             
-            // تحديث قائمة العملاء
             loadClientsList();
             updateDashboard();
         }
@@ -2987,7 +3056,6 @@
                 const item = document.createElement('div');
                 item.className = 'client-item';
                 
-                // تحديد لون الرصيد
                 const balanceClass = client.balance > 0 ? 'balance-negative' : 
                                    client.balance < 0 ? 'balance-positive' : '';
                 
@@ -3004,7 +3072,6 @@
                     </button>
                 `;
                 
-                // إضافة مستمع الحدث لعرض الفواتير
                 item.querySelector('button').addEventListener('click', function() {
                     const clientName = this.getAttribute('data-client-name');
                     viewClientInvoices(clientName);
@@ -3021,35 +3088,24 @@
             const clientInvoices = document.getElementById('client-invoices');
             const clientPayments = document.getElementById('client-payments');
             
-            // إظهار قسم الفواتير
             clientInvoicesSection.style.display = 'block';
-            
-            // تعبئة اسم العميل
             document.getElementById('current-client-name').textContent = clientName;
             
-            // البحث عن العميل
             const client = clients.find(c => c.name === clientName);
             if (client) {
-                // تحديث المعلومات المالية
                 document.getElementById('current-client-balance').textContent = (client.balance || 0).toFixed(2);
                 
-                // حساب إجمالي المشتريات
                 const clientInvoicesList = invoices.filter(invoice => invoice.client.name === clientName);
                 const totalPurchases = clientInvoicesList.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
                 document.getElementById('total-client-purchases').textContent = totalPurchases.toFixed(2);
                 
-                // حساب إجمالي المدفوعات
                 const totalPayments = (client.payments || []).reduce((sum, payment) => sum + payment.amount, 0);
                 document.getElementById('total-client-payments').textContent = totalPayments.toFixed(2);
                 
-                // عرض الدفعات
                 displayClientPayments(client);
             }
             
-            // عرض الفواتير
-            const clientInvoicesList = invoices.filter(invoice => 
-                invoice.client.name === clientName
-            );
+            const clientInvoicesList = invoices.filter(invoice => invoice.client.name === clientName);
             
             clientInvoices.innerHTML = '';
             
@@ -3060,7 +3116,6 @@
                     const invoiceDiv = document.createElement('div');
                     invoiceDiv.className = 'invoice-item';
                     
-                    // عرض تفاصيل المنتجات المشتراة
                     let productsHTML = '';
                     invoice.products.forEach(product => {
                         productsHTML += `
@@ -3070,7 +3125,6 @@
                         `;
                     });
                     
-                    // عرض تفاصيل الدفع
                     let paymentHTML = '';
                     if (invoice.payment.type === 'multiple') {
                         paymentHTML = `
@@ -3104,7 +3158,6 @@
                         </button>
                     `;
                     
-                    // إضافة مستمع الحدث لتعديل الفاتورة
                     invoiceDiv.querySelector('.edit-invoice').addEventListener('click', function() {
                         editInvoice(invoice.id);
                     });
@@ -3151,14 +3204,12 @@
                 return;
             }
             
-            // البحث عن العميل
             const client = clients.find(c => c.name === currentViewingClient);
             if (!client) {
                 showNotification('لم يتم العثور على العميل', 'error');
                 return;
             }
             
-            // إضافة الدفعة
             const payment = {
                 id: Date.now().toString(),
                 date: new Date().toISOString(),
@@ -3172,115 +3223,16 @@
             
             client.payments.push(payment);
             
-            // تحديث رصيد العميل
             client.balance = (client.balance || 0) - amount;
             
-            // حفظ التغييرات
             localStorage.setItem('clients', JSON.stringify(clients));
             
             showNotification('تم إضافة الدفعة بنجاح');
             
-            // إخفاء النموذج وتحديث العرض
             document.getElementById('payment-form').style.display = 'none';
             document.getElementById('payment-amount').value = '0.00';
             
-            // تحديث عرض العميل
             viewClientInvoices(currentViewingClient);
-        }
-        
-        // دالة لتعديل الفاتورة
-        function editInvoice(invoiceId) {
-            // البحث عن الفاتورة
-            const invoiceIndex = invoices.findIndex(inv => inv.id === invoiceId);
-            if (invoiceIndex === -1) {
-                showNotification('لم يتم العثور على الفاتورة', 'error');
-                return;
-            }
-            
-            const invoice = invoices[invoiceIndex];
-            
-            // الانتقال إلى تبويب إنشاء الفاتورة
-            document.querySelector('.tab[data-tab="invoice"]').click();
-            
-            // تعبئة بيانات العميل
-            document.getElementById('client-name').value = invoice.client.name;
-            document.getElementById('client-address').value = invoice.client.address || '';
-            document.getElementById('client-phone').value = invoice.client.phone || '';
-            
-            // مسح المنتجات الحالية
-            document.getElementById('products-body').innerHTML = '';
-            productCount = 0;
-            
-            // إضافة منتجات الفاتورة
-            invoice.products.forEach(product => {
-                addProductRow();
-                const lastRow = document.querySelector('#products-body tr:last-child');
-                lastRow.querySelector('.product-name').value = product.productName;
-                lastRow.querySelector('.quantity').value = product.quantity;
-                lastRow.querySelector('.price').value = product.price;
-                lastRow.querySelector('.discount').value = product.discount;
-                calculateRowTotal(lastRow);
-            });
-            
-            // تعبئة بيانات الدفع
-            if (invoice.payment.type === 'multiple') {
-                document.getElementById('enable-multiple-payments').checked = true;
-                document.getElementById('multiple-payments-section').style.display = 'block';
-                document.getElementById('single-payment-section').style.display = 'none';
-                
-                // مسح الدفعات الحالية
-                document.getElementById('multiple-payments-section').innerHTML = '';
-                
-                // إضافة الدفعات
-                invoice.payment.payments.forEach(payment => {
-                    const paymentRow = document.createElement('div');
-                    paymentRow.className = 'payment-row';
-                    paymentRow.innerHTML = `
-                        <select class="payment-method-select">
-                            <option value="cash" ${payment.method === 'cash' ? 'selected' : ''}>كاش</option>
-                            <option value="check" ${payment.method === 'check' ? 'selected' : ''}>شيكات</option>
-                            <option value="exchange" ${payment.method === 'exchange' ? 'selected' : ''}>تبديل بضائع</option>
-                            <option value="bank" ${payment.method === 'bank' ? 'selected' : ''}>تحويل بنكي</option>
-                        </select>
-                        <input type="number" class="payment-amount" placeholder="المبلغ" min="0" step="0.01" value="${payment.amount}">
-                        <button class="btn btn-danger remove-payment">
-                            <i class="fas fa-trash"></i> حذف
-                        </button>
-                    `;
-                    document.getElementById('multiple-payments-section').appendChild(paymentRow);
-                });
-                
-                // إضافة زر إضافة طريقة دفع
-                const addButton = document.createElement('button');
-                addButton.className = 'btn';
-                addButton.id = 'add-payment-method';
-                addButton.innerHTML = '<i class="fas fa-plus"></i> إضافة طريقة دفع أخرى';
-                document.getElementById('multiple-payments-section').appendChild(addButton);
-                
-                // إضافة ملخص الدفع
-                const summaryDiv = document.createElement('div');
-                summaryDiv.className = 'payment-summary';
-                summaryDiv.innerHTML = `<strong>إجمالي المدفوع:</strong> <span id="total-paid">${invoice.payment.paidAmount.toFixed(2)}</span> دينار`;
-                document.getElementById('multiple-payments-section').appendChild(summaryDiv);
-                
-                setupMultiplePayments();
-            } else {
-                document.getElementById('enable-multiple-payments').checked = false;
-                document.getElementById('multiple-payments-section').style.display = 'none';
-                document.getElementById('single-payment-section').style.display = 'block';
-                document.querySelector(`input[name="payment-method"][value="${invoice.payment.method}"]`).checked = true;
-                document.getElementById('paid-amount').value = invoice.payment.paidAmount;
-            }
-            
-            // حساب المجاميع
-            calculateTotals();
-            updatePaymentBalance();
-            
-            // حذف الفاتورة القديمة
-            invoices.splice(invoiceIndex, 1);
-            localStorage.setItem('invoices', JSON.stringify(invoices));
-            
-            showNotification('يمكنك الآن تعديل الفاتورة');
         }
         
         // دالة لتصفية العملاء
@@ -3328,14 +3280,12 @@
                 return;
             }
             
-            // ترتيب الفواتير من الأحدث إلى الأقدم
             invoicesList.sort((a, b) => new Date(b.date) - new Date(a.date));
             
             invoicesList.forEach(invoice => {
                 const invoiceDiv = document.createElement('div');
                 invoiceDiv.className = 'invoice-item';
                 
-                // عرض تفاصيل المنتجات المشتراة
                 let productsHTML = '';
                 invoice.products.forEach(product => {
                     productsHTML += `
@@ -3362,7 +3312,6 @@
                     </button>
                 `;
                 
-                // إضافة مستمع الحدث لتعديل الفاتورة
                 invoiceDiv.querySelector('.edit-invoice').addEventListener('click', function() {
                     editInvoice(invoice.id);
                 });
@@ -3402,7 +3351,6 @@
                 return;
             }
             
-            // ترتيب المشتريات من الأحدث إلى الأقدم
             purchasesList.sort((a, b) => new Date(b.date) - new Date(a.date));
             
             purchasesList.forEach(purchase => {
@@ -3434,20 +3382,15 @@
                 return;
             }
             
-            // تجميع المشتريات حسب السماكة
             const thicknessTotals = {};
             purchaseHistory.forEach(purchase => {
-                // استخراج السماكة من اسم المنتج
                 const thicknessMatch = purchase.productName.match(/(\d+\.?\d*)\s*مم/);
                 if (thicknessMatch) {
                     const thickness = thicknessMatch[1];
                     const key = `${thickness} مم`;
                     
                     if (!thicknessTotals[key]) {
-                        thicknessTotals[key] = {
-                            quantity: 0,
-                            total: 0
-                        };
+                        thicknessTotals[key] = { quantity: 0, total: 0 };
                     }
                     thicknessTotals[key].quantity += purchase.quantity;
                     thicknessTotals[key].total += purchase.total;
@@ -3479,14 +3422,10 @@
                 return;
             }
             
-            // تجميع المشتريات حسب المنتج
             const productTotals = {};
             purchaseHistory.forEach(purchase => {
                 if (!productTotals[purchase.productName]) {
-                    productTotals[purchase.productName] = {
-                        quantity: 0,
-                        total: 0
-                    };
+                    productTotals[purchase.productName] = { quantity: 0, total: 0 };
                 }
                 productTotals[purchase.productName].quantity += purchase.quantity;
                 productTotals[purchase.productName].total += purchase.total;
@@ -3541,7 +3480,6 @@
             const inventoryGrid = document.getElementById('inventory-grid');
             inventoryGrid.innerHTML = '';
             
-            // دمج المخزون العادي والقديم
             const allInventory = [...inventory, ...oldInventory];
             
             if (allInventory.length === 0) {
@@ -3569,7 +3507,6 @@
                     </div>
                 `;
                 
-                // إضافة مستمعي الأحداث للأزرار
                 itemDiv.querySelector('.edit-inventory').addEventListener('click', function() {
                     editInventoryItem(item.id);
                 });
@@ -3584,7 +3521,6 @@
         
         // دالة لتعديل عنصر في المخزون
         function editInventoryItem(itemId) {
-            // البحث عن العنصر في المخزون العادي أو القديم
             let item = inventory.find(item => item.id === itemId);
             let isOld = false;
             
@@ -3600,13 +3536,11 @@
             
             editingInventoryItem = { item, isOld };
             
-            // تعبئة النموذج بالبيانات الحالية
             document.getElementById('edit-product-name').value = item.name;
             document.getElementById('edit-product-thickness').value = item.thickness || '';
             document.getElementById('edit-product-quantity').value = item.quantity;
             document.getElementById('edit-product-price').value = item.price || 0;
             
-            // إظهار نموذج التعديل
             document.getElementById('edit-inventory-form').style.display = 'block';
         }
         
@@ -3632,13 +3566,11 @@
                 return;
             }
             
-            // تحديث البيانات
             editingInventoryItem.item.name = name;
             editingInventoryItem.item.thickness = thickness;
             editingInventoryItem.item.quantity = quantity;
             editingInventoryItem.item.price = price;
             
-            // حفظ التغييرات
             if (editingInventoryItem.isOld) {
                 localStorage.setItem('oldInventory', JSON.stringify(oldInventory));
             } else {
@@ -3647,7 +3579,6 @@
             
             showNotification('تم تعديل البضاعة بنجاح');
             
-            // إخفاء النموذج وتحديث العرض
             document.getElementById('edit-inventory-form').style.display = 'none';
             editingInventoryItem = null;
             loadInventory();
@@ -3660,7 +3591,6 @@
                 return;
             }
             
-            // البحث عن العنصر في المخزون العادي أو القديم
             let itemIndex = inventory.findIndex(item => item.id === itemId);
             let isOld = false;
             
@@ -3674,7 +3604,6 @@
                 return;
             }
             
-            // حذف العنصر
             if (isOld) {
                 oldInventory.splice(itemIndex, 1);
                 localStorage.setItem('oldInventory', JSON.stringify(oldInventory));
@@ -3719,12 +3648,10 @@
             
             showNotification('تم إضافة الحديد إلى المخزون بنجاح');
             
-            // إعادة تعيين الحقول
             document.getElementById('steel-thickness').value = '';
             document.getElementById('steel-quantity').value = '1';
             document.getElementById('steel-price').value = '0.00';
             
-            // تحديث العرض
             loadInventory();
             populateWithdrawalProducts();
         }
@@ -3758,12 +3685,10 @@
             
             showNotification('تم إضافة البضاعة القديمة بنجاح');
             
-            // إعادة تعيين الحقول
             document.getElementById('old-product-name').value = '';
             document.getElementById('old-product-quantity').value = '1';
             document.getElementById('old-product-price').value = '0.00';
             
-            // تحديث العرض
             loadInventory();
             populateWithdrawalProducts();
         }
@@ -3795,7 +3720,6 @@
                 withdrawalsBody.appendChild(row);
             });
             
-            // إضافة مستمعي الأحداث لأزرار الحذف
             document.querySelectorAll('.remove-withdrawal').forEach(button => {
                 button.addEventListener('click', function() {
                     const id = this.getAttribute('data-id');
@@ -3814,7 +3738,6 @@
             const withdrawalProduct = document.getElementById('withdrawal-product');
             withdrawalProduct.innerHTML = '<option value="">اختر البضاعة</option>';
             
-            // دمج المخزون العادي والقديم
             const allInventory = [...inventory, ...oldInventory];
             
             allInventory.forEach(item => {
@@ -3838,7 +3761,6 @@
                 return;
             }
             
-            // البحث عن المنتج في المخزون
             const allInventory = [...inventory, ...oldInventory];
             const inventoryItem = allInventory.find(item => {
                 const displayName = item.thickness ? `${item.name} ${item.thickness} مم` : item.name;
@@ -3850,17 +3772,14 @@
                 return;
             }
             
-            // تحديث المخزون
             inventoryItem.quantity -= quantity;
             
-            // حفظ التغييرات في التخزين المناسب
             if (inventoryItem.type === 'old') {
                 localStorage.setItem('oldInventory', JSON.stringify(oldInventory));
             } else {
                 localStorage.setItem('inventory', JSON.stringify(inventory));
             }
             
-            // حفظ المسحوبات
             const withdrawal = {
                 id: Date.now().toString(),
                 date: new Date().toISOString(),
@@ -3874,12 +3793,10 @@
             
             showNotification('تم تسجيل المسحوبات بنجاح');
             
-            // إعادة تعيين الحقول
             document.getElementById('withdrawal-recipient').value = '';
             document.getElementById('withdrawal-product').value = '';
             document.getElementById('withdrawal-quantity').value = '1';
             
-            // تحديث العرض
             loadInventory();
             loadWithdrawals();
         }
@@ -3902,11 +3819,9 @@
         
         // دالة لطباعة كشف الراتب
         function printSalary() {
-            // تحديث التواريخ قبل الطباعة
             document.getElementById('invoice-date').textContent = new Date().toLocaleDateString('en-US');
             document.getElementById('hijri-date').textContent = getHijriDate();
             
-            // إنشاء نافذة طباعة مخصصة للكشف
             const printWindow = window.open('', '_blank');
             const employeeName = document.getElementById('employee-name').value || 'غير محدد';
             const employeeId = document.getElementById('employee-id').value || 'غير محدد';
@@ -4068,7 +3983,6 @@
                     </div>
                 `;
                 
-                // إضافة مستمعي الأحداث للأزرار
                 salaryDiv.querySelector('.print-salary-item').addEventListener('click', function() {
                     printSalaryItem(salary.id);
                 });
@@ -4189,7 +4103,6 @@
             inputFields.innerHTML = '';
             
             if (calculationType === '1') {
-                // حساب الوزن
                 inputFields.innerHTML = `
                     <div>
                         <strong>عرض الشريحة (سم):</strong>
@@ -4201,7 +4114,6 @@
                     </div>
                 `;
             } else if (calculationType === '2') {
-                // حساب السماكة
                 inputFields.innerHTML = `
                     <div>
                         <strong>عرض الشريحة (سم):</strong>
@@ -4213,7 +4125,6 @@
                     </div>
                 `;
             } else if (calculationType === '3') {
-                // حساب عرض الشريحة
                 inputFields.innerHTML = `
                     <div>
                         <strong>السماكة (مم):</strong>
@@ -4233,7 +4144,6 @@
             let resultHTML = '';
             
             if (calculationType === '1') {
-                // حساب الوزن
                 const width = parseFloat(document.getElementById('sheet-width').value);
                 const thickness = parseFloat(document.getElementById('sheet-thickness').value);
                 
@@ -4249,7 +4159,6 @@
                     <p><strong>السماكة:</strong> ${thickness} مم</p>
                 `;
             } else if (calculationType === '2') {
-                // حساب السماكة
                 const width = parseFloat(document.getElementById('sheet-width').value);
                 const weight = parseFloat(document.getElementById('sheet-weight').value);
                 
@@ -4266,7 +4175,6 @@
                     <p><strong>الوزن:</strong> ${weight} كجم</p>
                 `;
             } else if (calculationType === '3') {
-                // حساب عرض الشريحة
                 const thickness = parseFloat(document.getElementById('sheet-thickness').value);
                 const weight = parseFloat(document.getElementById('sheet-weight').value);
                 
@@ -4314,14 +4222,12 @@
                 return invoiceDate >= todayStart && invoiceDate < todayEnd;
             });
             
-            // حساب الإحصائيات
             const totalSales = dailyInvoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
             const totalProducts = dailyInvoices.reduce((sum, invoice) => sum + invoice.products.length, 0);
             const totalUnits = dailyInvoices.reduce((sum, invoice) => sum + invoice.products.reduce((prodSum, product) => prodSum + product.quantity, 0), 0);
             const uniqueCustomers = [...new Set(dailyInvoices.map(invoice => invoice.client.name))].length;
             const avgInvoice = dailyInvoices.length > 0 ? totalSales / dailyInvoices.length : 0;
             
-            // تحديث الواجهة
             document.getElementById('daily-total-sales').textContent = totalSales.toFixed(2) + ' دينار';
             document.getElementById('daily-invoices-count').textContent = dailyInvoices.length + ' فاتورة';
             document.getElementById('daily-products-sold').textContent = totalProducts + ' منتج';
@@ -4329,7 +4235,6 @@
             document.getElementById('daily-avg-invoice').textContent = avgInvoice.toFixed(2) + ' دينار';
             document.getElementById('daily-customers-count').textContent = uniqueCustomers + ' عميل';
             
-            // تحديث تفاصيل المبيعات
             displaySalesDetails('daily', dailyInvoices);
         }
         
@@ -4348,14 +4253,12 @@
                 return invoiceDate >= startOfWeek && invoiceDate < endOfWeek;
             });
             
-            // حساب الإحصائيات
             const totalSales = weeklyInvoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
             const totalProducts = weeklyInvoices.reduce((sum, invoice) => sum + invoice.products.length, 0);
             const totalUnits = weeklyInvoices.reduce((sum, invoice) => sum + invoice.products.reduce((prodSum, product) => prodSum + product.quantity, 0), 0);
             const uniqueCustomers = [...new Set(weeklyInvoices.map(invoice => invoice.client.name))].length;
             const avgDaily = weeklyInvoices.length > 0 ? totalSales / 7 : 0;
             
-            // تحديث الواجهة
             document.getElementById('weekly-total-sales').textContent = totalSales.toFixed(2) + ' دينار';
             document.getElementById('weekly-invoices-count').textContent = weeklyInvoices.length + ' فاتورة';
             document.getElementById('weekly-products-sold').textContent = totalProducts + ' منتج';
@@ -4363,7 +4266,6 @@
             document.getElementById('weekly-avg-daily').textContent = avgDaily.toFixed(2) + ' دينار';
             document.getElementById('weekly-customers-count').textContent = uniqueCustomers + ' عميل';
             
-            // تحديث تفاصيل المبيعات
             displaySalesDetails('weekly', weeklyInvoices);
         }
         
@@ -4378,7 +4280,6 @@
                 return invoiceDate >= startOfMonth && invoiceDate <= endOfMonth;
             });
             
-            // حساب الإحصائيات
             const totalSales = monthlyInvoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
             const totalProducts = monthlyInvoices.reduce((sum, invoice) => sum + invoice.products.length, 0);
             const totalUnits = monthlyInvoices.reduce((sum, invoice) => sum + invoice.products.reduce((prodSum, product) => prodSum + product.quantity, 0), 0);
@@ -4386,7 +4287,6 @@
             const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
             const avgDaily = monthlyInvoices.length > 0 ? totalSales / daysInMonth : 0;
             
-            // تحديث الواجهة
             document.getElementById('monthly-total-sales').textContent = totalSales.toFixed(2) + ' دينار';
             document.getElementById('monthly-invoices-count').textContent = monthlyInvoices.length + ' فاتورة';
             document.getElementById('monthly-products-sold').textContent = totalProducts + ' منتج';
@@ -4394,7 +4294,6 @@
             document.getElementById('monthly-avg-daily').textContent = avgDaily.toFixed(2) + ' دينار';
             document.getElementById('monthly-customers-count').textContent = uniqueCustomers + ' عميل';
             
-            // تحديث تفاصيل المبيعات
             displaySalesDetails('monthly', monthlyInvoices);
         }
         
@@ -4410,24 +4309,19 @@
                 return invoiceDate >= startOfYear && invoiceDate <= endOfYear;
             });
             
-            // حساب الإحصائيات السنوية
             const totalSales = annualInvoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
             const totalInvoices = annualInvoices.length;
             const uniqueCustomers = [...new Set(annualInvoices.map(invoice => invoice.client.name))].length;
             const monthlyAvg = totalSales / 12;
             
-            // حساب المبيعات حسب الشهر
             const monthlySales = {};
-            for (let i = 0; i < 12; i++) {
-                monthlySales[i] = 0;
-            }
+            for (let i = 0; i < 12; i++) monthlySales[i] = 0;
             
             annualInvoices.forEach(invoice => {
                 const month = new Date(invoice.date).getMonth();
                 monthlySales[month] += invoice.grandTotal;
             });
             
-            // العثور على أفضل شهر
             let bestMonth = 0;
             let bestMonthSales = 0;
             for (let i = 0; i < 12; i++) {
@@ -4439,7 +4333,6 @@
             
             const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
             
-            // تحديث الواجهة
             document.getElementById('annual-total-sales').textContent = totalSales.toFixed(2) + ' دينار';
             document.getElementById('annual-invoices-count').textContent = totalInvoices + ' فاتورة';
             document.getElementById('best-month-sales').textContent = bestMonthSales.toFixed(2) + ' دينار';
@@ -4447,28 +4340,22 @@
             document.getElementById('monthly-avg-sales').textContent = monthlyAvg.toFixed(2) + ' دينار';
             document.getElementById('annual-customers-count').textContent = uniqueCustomers + ' عميل';
             
-            // تحديث الرسم البياني للشهور
             const monthlyChart = document.getElementById('monthly-chart');
             monthlyChart.innerHTML = '';
             
+            const maxSales = Math.max(...Object.values(monthlySales));
             for (let i = 0; i < 12; i++) {
                 const monthBar = document.createElement('div');
                 monthBar.className = 'month-bar';
-                
-                // حساب ارتفاع العمود (نسبة مئوية من أعلى قيمة)
-                const maxSales = Math.max(...Object.values(monthlySales));
                 const height = maxSales > 0 ? (monthlySales[i] / maxSales) * 100 : 0;
-                
                 monthBar.innerHTML = `
                     <div class="month-value">${monthlySales[i].toFixed(2)} دينار</div>
                     <div class="bar" style="height: ${height}%;"></div>
                     <div class="month-name">${monthNames[i]}</div>
                 `;
-                
                 monthlyChart.appendChild(monthBar);
             }
             
-            // تحديث تفاصيل المبيعات
             displaySalesDetails('annual', annualInvoices);
         }
         
@@ -4483,15 +4370,11 @@
                 return;
             }
             
-            // حساب عدد الصفحات
             const totalPages = Math.ceil(invoicesList.length / salesPerPage);
-            
-            // الحصول على البيانات للصفحة الحالية
             const startIndex = (currentSalesPage - 1) * salesPerPage;
             const endIndex = startIndex + salesPerPage;
             const currentPageInvoices = invoicesList.slice(startIndex, endIndex);
             
-            // إنشاء الجدول
             let tableHTML = `
                 <table class="sales-details-table">
                     <thead>
@@ -4526,18 +4409,14 @@
             
             tableHTML += '</tbody></table>';
             
-            // إضافة التقسيم للصفحات
             if (totalPages > 1) {
                 let paginationHTML = '<div class="pagination">';
-                
                 for (let i = 1; i <= totalPages; i++) {
                     paginationHTML += `<button class="${i === currentSalesPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
                 }
-                
                 paginationHTML += '</div>';
                 tableHTML += paginationHTML;
                 
-                // إضافة مستمعي الأحداث لأزرار الصفحات
                 container.innerHTML = tableHTML;
                 
                 container.querySelectorAll('.pagination button').forEach(button => {
@@ -4557,7 +4436,6 @@
             const reportTitle = getReportTitle(reportType);
             
             let reportContent = '';
-            
             if (reportType === 'daily') {
                 reportContent = document.getElementById('daily-report').innerHTML;
             } else if (reportType === 'weekly') {
