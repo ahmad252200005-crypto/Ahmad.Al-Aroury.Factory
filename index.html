@@ -6,6 +6,7 @@
     <title>نظام إدارة المصنع المتكامل - مصنع أحمد العاروري</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* جميع الأنماط كما هي (نفس الكود السابق) مع إضافة بعض التحسينات للجداول */
         * {
             box-sizing: border-box;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -752,6 +753,14 @@
             border: 1px solid #ffeaa7;
         }
         
+        .product-sales-section {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid #a5d6a7;
+        }
+        
         .total-purchases-section {
             margin-top: 30px;
         }
@@ -1286,7 +1295,7 @@
                 </div>
             </div>
             
-            <!-- جدول المنتجات مع عمود السماكة (اختياري) -->
+            <!-- جدول المنتجات مع عمود السماكة -->
             <table id="products-table">
                 <thead>
                     <tr>
@@ -1512,7 +1521,7 @@
             </div>
         </div>
         
-        <!-- تبويب سجل المشتريات -->
+        <!-- تبويب سجل المشتريات (مع الجدولين) -->
         <div class="tab-content" id="purchases-tab">
             <h1><i class="fas fa-shopping-cart"></i> سجل مشتريات العملاء</h1>
             
@@ -1541,9 +1550,11 @@
                     </div>
                 </div>
                 
-                <h3 style="margin-top: 30px;">إجمالي المشتريات حسب القطع</h3>
-                <div id="total-purchases">
-                    <!-- سيتم عرض إجمالي المشتريات هنا -->
+                <h3 style="margin-top: 30px;">إجمالي المبيعات حسب المنتج</h3>
+                <div class="product-sales-section">
+                    <div id="product-sales-totals">
+                        <!-- سيتم عرض إجمالي المبيعات لكل منتج هنا -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -2776,6 +2787,8 @@
         
         function loadPurchaseHistory() {
             displayPurchaseHistory(purchaseHistory);
+            loadSteelThicknessPurchases();
+            loadProductSalesTotals(); // تحميل إجمالي المبيعات لكل منتج
         }
         
         function displayPurchaseHistory(purchasesList) {
@@ -2847,38 +2860,42 @@
             steelThicknessPurchases.innerHTML = html;
         }
         
-        function loadTotalPurchases() {
-            const totalPurchases = document.getElementById('total-purchases');
+        // دالة جديدة لحساب إجمالي المبيعات لكل منتج (بدون تمييز بالسماكة)
+        function loadProductSalesTotals() {
+            const productSalesDiv = document.getElementById('product-sales-totals');
             
             if (purchaseHistory.length === 0) {
-                totalPurchases.innerHTML = '<p>لا توجد مشتريات مسجلة</p>';
+                productSalesDiv.innerHTML = '<p>لا توجد مشتريات مسجلة</p>';
                 return;
             }
             
             const productTotals = {};
             purchaseHistory.forEach(purchase => {
-                const key = purchase.thickness ? `${purchase.productName} (${purchase.thickness} مم)` : purchase.productName;
-                if (!productTotals[key]) {
-                    productTotals[key] = { quantity: 0, total: 0 };
+                const productName = purchase.productName;
+                if (!productTotals[productName]) {
+                    productTotals[productName] = { quantity: 0, total: 0 };
                 }
-                productTotals[key].quantity += purchase.quantity;
-                productTotals[key].total += purchase.total;
+                productTotals[productName].quantity += purchase.quantity;
+                productTotals[productName].total += purchase.total;
             });
             
-            let html = '<table><thead><tr><th>القطعة</th><th>الكمية الإجمالية</th><th>القيمة الإجمالية</th></tr></thead><tbody>';
+            let html = '<table><thead><tr><th>المنتج</th><th>الكمية الإجمالية المباعة</th><th>إجمالي المبيعات</th></tr></thead><tbody>';
             
-            for (const key in productTotals) {
+            // ترتيب تنازلي حسب الكمية
+            const sortedProducts = Object.keys(productTotals).sort((a, b) => productTotals[b].quantity - productTotals[a].quantity);
+            
+            sortedProducts.forEach(productName => {
                 html += `
                     <tr>
-                        <td>${key}</td>
-                        <td>${productTotals[key].quantity}</td>
-                        <td>${productTotals[key].total.toFixed(2)} دينار</td>
+                        <td>${productName}</td>
+                        <td>${productTotals[productName].quantity}</td>
+                        <td>${productTotals[productName].total.toFixed(2)} دينار</td>
                     </tr>
                 `;
-            }
+            });
             
             html += '</tbody></table>';
-            totalPurchases.innerHTML = html;
+            productSalesDiv.innerHTML = html;
         }
         
         // ------------------- دوال الإشعارات -------------------
@@ -3655,8 +3672,8 @@
                     localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
                     showNotification('تم مسح جميع المشتريات بنجاح');
                     loadPurchaseHistory();
-                    loadTotalPurchases();
                     loadSteelThicknessPurchases();
+                    loadProductSalesTotals();
                     updateDashboard();
                 } else {
                     showNotification('كلمة المرور غير صحيحة', 'error');
@@ -3720,9 +3737,7 @@
                 } else if (this.getAttribute('data-tab') === 'history') {
                     loadInvoicesHistory();
                 } else if (this.getAttribute('data-tab') === 'purchases') {
-                    loadPurchaseHistory();
-                    loadTotalPurchases();
-                    loadSteelThicknessPurchases();
+                    loadPurchaseHistory(); // هذه الدالة تقوم بتحميل كل شيء (التفاصيل، السماكة، إجمالي المنتجات)
                 } else if (this.getAttribute('data-tab') === 'employees') {
                     loadEmployeeSalaries();
                 } else if (this.getAttribute('data-tab') === 'calculator') {
