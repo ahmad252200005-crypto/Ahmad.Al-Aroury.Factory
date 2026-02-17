@@ -227,6 +227,11 @@
             box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
         }
         
+        /* عنصر span المخصص للطباعة - مخفي في وضع العرض */
+        .print-value {
+            display: none;
+        }
+        
         .btn {
             background: linear-gradient(to bottom, #3498db, #2980b9);
             color: white;
@@ -905,252 +910,468 @@
         }
 
         /* خلفية الترويسة للطباعة */
-        @media print {
-            @page {
-                margin: 0;
-                size: A4;
-            }
-            
-            body {
-                background-color: white;
-                padding: 0;
-                margin: 0;
-                font-size: 14px;
-                width: 100%;
-            }
-            
-            .container {
-                box-shadow: none;
-                padding: 10px;
-                margin: 0;
-                max-width: 100%;
-                width: 100%;
-                position: relative;
-            }
-            
-            .container::before {
-                content: '';
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><rect width="100%" height="100%" fill="white"/><text x="50%" y="45%" font-family="Arial" font-size="48" font-weight="bold" text-anchor="middle" fill="rgba(0,0,0,0.05)">مصنع أحمد العاروري</text><text x="50%" y="55%" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" fill="rgba(0,0,0,0.05)">لصناعة أكسسوارات الديكور</text><text x="50%" y="65%" font-family="Arial" font-size="24" text-anchor="middle" fill="rgba(0,0,0,0.05)">FACTORY FOR DECORATION ACCESSORIES</text></svg>');
-                background-repeat: no-repeat;
-                background-position: center;
-                z-index: -1;
-                opacity: 0.1;
-            }
-            
-            .no-print {
-                display: none !important;
-            }
-            
-            .print-header {
-                margin-bottom: 20px;
-                padding: 15px;
-                border-bottom: 3px double #000;
-                background: white;
-            }
-            
-            .print-header h1 {
-                font-size: 28px;
-            }
-            
-            .print-header h2 {
-                font-size: 20px;
-            }
-            
-            .client-info, .total-section {
-                border: 2px solid #000 !important;
-                margin: 10px 0;
-            }
-            
-            th {
-                background: #ddd !important;
-                color: #000 !important;
-                font-weight: bold;
-            }
-            
-            table {
-                border: 1px solid #000;
-                width: 100%;
-            }
-            
-            td, th {
-                border: 1px solid #000;
-                padding: 8px;
-            }
-            
-            .total-section div {
-                font-size: 16px;
-                font-weight: bold;
-            }
-            
-            .grand-total {
-                font-size: 20px;
-                border-top: 2px solid #000;
-            }
-            
-            /* تجنب تقسيم الجداول بين الصفحات */
-            table { page-break-inside: auto; }
-            tr    { page-break-inside: avoid; page-break-after: auto; }
-            thead { display: table-header-group; }
-            tfoot { display: table-footer-group; }
-        }
+       @media print {
+    @page {
+        margin: 0.5cm;
+        size: A4;
+    }
+    
+    body {
+        background: white;
+        padding: 0;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.3;
+        width: 100%;
+    }
+    
+    .container {
+        box-shadow: none;
+        padding: 5px;
+        margin: 0;
+        max-width: 100%;
+        width: 100%;
+    }
+    
+    .container::before {
+        opacity: 0.05; /* خفف العلامة المائية */
+    }
+    
+    /* إخفاء كل العناصر غير المرغوب فيها */
+    .no-print,
+    .tabs,
+    .dashboard,
+    .actions,
+    .btn,
+    input,
+    select,
+    .remove-product,
+    #add-product,
+    #calculate-totals,
+    #save-invoice,
+    #reset-invoice,
+    #set-full-payment,
+    .payment-methods,
+    #payment-details input,
+    #payment-details select,
+    #enable-multiple-payments,
+    #multiple-payments-section,
+    #add-payment-method,
+    #single-payment-section .btn,
+    .remaining-balance:not(#remaining-balance),
+    .client-info input,
+    .client-info select,
+    .invoice-header input {
+        display: none !important;
+    }
+    
+    /* إظهار النصوص فقط */
+    .print-header {
+        display: block !important;
+        text-align: center;
+        margin-bottom: 5px;
+        padding: 5px;
+        border-bottom: 2px double #000;
+        background: white;
+    }
+    
+    .print-header h1 {
+        font-size: 22px;
+        margin: 0;
+    }
+    
+    .print-header h2 {
+        font-size: 16px;
+        margin: 5px 0;
+    }
+    
+    .print-header .english-title {
+        font-size: 14px;
+    }
+    
+    #print-time {
+        margin-top: 5px;
+        font-size: 11px;
+        color: #333;
+    }
+    
+    .invoice-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+        padding: 5px 0;
+        border-bottom: 1px solid #000;
+        font-size: 11px;
+    }
+    
+    .invoice-info div,
+    .company-info div {
+        margin-bottom: 2px;
+    }
+    
+    .client-info {
+        padding: 5px;
+        margin: 5px 0;
+        border: 1px solid #000;
+        background: white;
+    }
+    
+    .client-info h3 {
+        margin-top: 0;
+        margin-bottom: 5px;
+        font-size: 14px;
+        border-bottom: 1px solid #aaa;
+        padding-bottom: 3px;
+    }
+    
+    .client-details {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+    }
+    
+    .client-details div {
+        font-size: 11px;
+    }
+    
+    .client-details strong {
+        display: block;
+        margin-bottom: 2px;
+    }
+    
+    /* جدول المنتجات */
+    #products-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 10px;
+        page-break-inside: avoid;
+        margin: 5px 0;
+    }
+    
+    #products-table th {
+        background: #ddd !important;
+        color: #000;
+        font-weight: bold;
+        border: 1px solid #000;
+        padding: 4px 2px;
+        font-size: 10px;
+    }
+    
+    #products-table td {
+        border: 1px solid #000;
+        padding: 4px 2px;
+        vertical-align: middle;
+    }
+    
+    /* إخفاء الحقول داخل الخلايا وإظهار الـ print-value */
+    #products-body td input,
+    #products-body td select,
+    #products-body td button {
+        display: none !important;
+    }
+    
+    #products-body td .print-value {
+        display: inline-block !important;
+        font-weight: normal;
+        color: black;
+        padding: 2px 5px;
+    }
+    
+    /* إجمالي الفاتورة */
+    .total-section {
+        margin-top: 5px;
+        padding: 5px;
+        border: 1px solid #000;
+        background: white;
+        page-break-inside: avoid;
+    }
+    
+    .total-section div {
+        font-size: 11px;
+        margin-bottom: 3px;
+        display: flex;
+        justify-content: space-between;
+    }
+    
+    .grand-total {
+        font-size: 13px;
+        border-top: 1px solid #000;
+        padding-top: 3px;
+        margin-top: 3px;
+        font-weight: bold;
+    }
+    
+    /* طريقة الدفع */
+    .payment-section {
+        padding: 5px;
+        margin-top: 5px;
+        border: 1px solid #000;
+        page-break-inside: avoid;
+    }
+    
+    .payment-section h3 {
+        font-size: 12px;
+        margin: 0 0 5px;
+    }
+    
+    .remaining-balance {
+        font-size: 12px;
+        font-weight: bold;
+        margin: 5px 0 0;
+    }
+    
+    /* عناصر إضافية */
+    .client-balance {
+        border: 1px solid #000;
+        padding: 3px;
+        margin: 5px 0;
+        background: #f9f9f9;
+        font-size: 11px;
+    }
+    
+    /* تجنب الكسر غير المرغوب فيه */
+    tr, .client-info, .total-section, .payment-section {
+        page-break-inside: avoid;
+    }
+    
+    /* عرض جميع العناصر النصية التي قد تكون مخفية */
+    #invoice-number,
+    #invoice-date,
+    #hijri-date,
+    #client-name,
+    #client-address,
+    #client-phone,
+    #previous-balance,
+    #subtotal,
+    #total-discount,
+    #total-tax,
+    #grand-total,
+    #paid-amount,
+    #balance-amount {
+        display: inline !important;
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        font-weight: normal !important;
+    }
+}
+      /* =========================================
+   تطوير الهاتف (نمط الشبكة الحديث - App Style)
+   ========================================= */
+@media (max-width: 768px) {
+    
+    /* ضبط الهوامش الخارجية */
+    body {
+        padding: 10px;
+        background: #f0f2f5; /* لون خلفية أهدأ للعين */
+    }
+
+    .container {
+        padding: 10px;
+        width: 100%;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    /* إخفاء ترويسة الجدول */
+    #products-table thead {
+        display: none;
+    }
+
+    #products-table tbody, #products-table tr, #products-table td {
+        display: block;
+        width: 100%;
+    }
+
+    /* تصميم كارت المنتج */
+    #products-table tr {
+        background: #ffffff;
+        border-radius: 12px; /* زوايا دائرية أكثر */
+        margin-bottom: 20px;
+        padding: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        border: 1px solid #e1e1e1;
+        position: relative;
         
-        @media (max-width: 768px) {
-            .invoice-header {
-                flex-direction: column;
-            }
-            
-            .invoice-info, .company-info {
-                width: 100%;
-                margin-bottom: 15px;
-            }
-            
-            table {
-                font-size: 14px;
-            }
-            
-            th, td {
-                padding: 10px 5px;
-            }
-            
-            .actions {
-                flex-direction: column;
-            }
-            
-            .actions .btn {
-                width: 100%;
-                margin-bottom: 10px;
-            }
-            
-            .tabs {
-                flex-wrap: wrap;
-            }
-            
-            .tab {
-                flex: 1;
-                min-width: 120px;
-                text-align: center;
-            }
-            
-            .payment-methods {
-                flex-direction: column;
-            }
-            
-            .invoice-header-small {
-                flex-direction: column;
-            }
-            
-            .payment-row {
-                flex-direction: column;
-            }
-            
-            .report-summary {
-                grid-template-columns: 1fr;
-            }
-            
-            .calculator-form {
-                grid-template-columns: 1fr;
-            }
-            
-            .employee-info {
-                grid-template-columns: 1fr;
-            }
-            
-            .dashboard {
-                grid-template-columns: 1fr;
-            }
-            
-            .monthly-chart {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        .search-client {
-            margin-bottom: 20px;
-        }
-        
-        .client-list {
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-        
-        .client-item {
-            padding: 10px 15px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-        }
-        
-        .client-item:hover {
-            background-color: #f0f8ff;
-        }
-        
-        .client-item:last-child {
-            border-bottom: none;
-        }
-        
-        .client-financial-info {
-            background: #e8f5e9;
-            padding: 15px;
-            border-radius: 6px;
-            margin: 10px 0;
-            border: 1px solid #c8e6c9;
-        }
-        
-        /* أنماط جديدة للتقارير */
-        .report-actions {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        
-        .chart-container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            margin: 20px 0;
-        }
-        
-        .annual-summary {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
-        }
-        
-        .annual-card {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            text-align: center;
-            border-top: 4px solid #3498db;
-        }
-        
-        .annual-card h4 {
-            margin: 0 0 10px 0;
-            color: #2c3e50;
-        }
-        
-        .annual-card .value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #3498db;
-        }
-        
-        .annual-card .sub-value {
-            font-size: 14px;
-            color: #7f8c8d;
-            margin-top: 5px;
-        }
+        /* استخدام الشبكة لترتيب العناصر */
+        display: grid;
+        grid-template-columns: 1fr 1fr; /* عمودين متساويين */
+        gap: 10px;
+    }
+
+    /* تنسيق الخلايا */
+    #products-table td {
+        border: none;
+        padding: 0;
+        text-align: right;
+    }
+
+    /* 1. اسم المنتج (يأخذ العرض كاملاً في الأعلى) */
+    #products-table td:nth-of-type(2) {
+        grid-column: 1 / -1; /* يمتد على كامل العرض */
+        margin-bottom: 10px;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 10px;
+    }
+
+    #products-table td:nth-of-type(2) select {
+        font-weight: bold;
+        color: #2c3e50;
+        border: none;
+        background: #f9f9f9;
+        font-size: 16px;
+    }
+
+    /* 2. الرقم التسلسلي (إخفاءه لأنه غير مهم في الهاتف) */
+    #products-table td:nth-of-type(1) {
+        display: none;
+    }
+
+    /* 3. تنسيق الحقول الصغيرة (السماكة، الكمية، السعر، الخصم) */
+    /* إضافة عناوين صغيرة فوق الحقول */
+    #products-table td:nth-of-type(3)::before { content: "السماكة"; display: block; font-size: 11px; color: #888; margin-bottom: 2px;}
+    #products-table td:nth-of-type(4)::before { content: "الكمية"; display: block; font-size: 11px; color: #888; margin-bottom: 2px;}
+    #products-table td:nth-of-type(5)::before { content: "السعر"; display: block; font-size: 11px; color: #888; margin-bottom: 2px;}
+    #products-table td:nth-of-type(6)::before { content: "الخصم %"; display: block; font-size: 11px; color: #888; margin-bottom: 2px;}
+
+    /* جعل الحقول تبدو حديثة */
+    #products-table input {
+        width: 100%;
+        background: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 8px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+    #products-table input:focus {
+        background: #fff;
+        border-color: #3498db;
+    }
+
+    /* 4. المجموع (يأخذ العرض كاملاً في الأسفل) */
+    #products-table td:nth-of-type(7) {
+        grid-column: 1 / -1;
+        background: #e8f5e9;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+        font-weight: bold;
+        color: #27ae60;
+        margin-top: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    #products-table td:nth-of-type(7)::before {
+        content: "الإجمالي:";
+        color: #333;
+    }
+
+    /* 5. زر الحذف (عائم أو بتصميم مميز) */
+    #products-table td:nth-of-type(8) {
+        grid-column: 1 / -1;
+        text-align: center;
+    }
+    
+    #products-table .btn.remove-product {
+        width: 100%;
+        background: #ffecb3;
+        color: #d35400;
+        border: none;
+        padding: 8px;
+        font-size: 13px;
+        border-radius: 6px;
+    }
+
+    /* تحسينات عامة للأزرار والقوائم في الهاتف */
+    .dashboard-header {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
+    
+    .invoice-header {
+        background: #fff;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+    }
+
+    .client-details {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .client-details input {
+        padding: 12px;
+    }
+
+    /* شريط التمرير للأزرار العلوية */
+    .tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 5px;
+        -webkit-overflow-scrolling: touch; /* تمرير سلس في آيفون */
+        background: transparent;
+        border: none;
+    }
+    
+    .tab {
+        flex: 0 0 auto;
+        border-radius: 20px;
+        margin-right: 8px;
+        font-size: 13px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border: 1px solid transparent;
+    }
+    
+    .tab.active {
+        background: #3498db;
+        border-color: #3498db;
+        box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3);
+    }
+
+    /* الشريط السفلي العائم للمجاميع */
+    .total-section {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 15px;
+        box-shadow: 0 -5px 20px rgba(0,0,0,0.15);
+        z-index: 1000;
+        border-radius: 20px 20px 0 0;
+        animation: slideUp 0.3s ease-out;
+    }
+    
+    /* إخفاء بعض التفاصيل غير المهمة في الشريط العائم لتوفير المساحة */
+    .total-section div:not(.grand-total) {
+        display: none; 
+        /* إذا أردت إظهار التفاصيل يمكنك حذف هذا السطر، لكن الأفضل إخفاؤها للوضوح */
+    }
+    
+    .grand-total {
+        margin: 0;
+        border: none;
+        padding: 0;
+        font-size: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* رفع المحتوى لكي لا يغطيه الشريط السفلي */
+    body {
+        padding-bottom: 100px; 
+    }
+}
     </style>
 </head>
 <body>
@@ -1927,49 +2148,172 @@
             return getHijriDateFromDate(new Date());
         }
         
-        // ------------------- دوال إدارة المنتجات في الفاتورة -------------------
+        // ------------------- دوال إدارة المنتجات في الفاتورة (معدلة لإضافة span) -------------------
         function addProductRow() {
             productCount++;
             const tbody = document.getElementById('products-body');
             const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${productCount}</td>
-                <td>
-                    <div class="product-select">
-                        <select class="product-name">
-                            <option value="">اختر منتج</option>
-                            ${baseProducts.map(product => `<option value="${product}">${product}</option>`).join('')}
-                        </select>
-                    </div>
-                </td>
-                <td><input type="number" class="thickness" value="0" min="0" step="0.1" placeholder="سماكة"></td>
-                <td><input type="number" class="quantity" value="1" min="1"></td>
-                <td><input type="number" class="price" value="0.00" min="0" step="0.01" placeholder="السعر شامل الضريبة"></td>
-                <td><input type="number" class="discount" value="0" min="0" max="100"></td>
-                <td class="total">0.00</td>
-                <td class="no-print">
-                    <button class="btn btn-danger remove-product">
-                        <i class="fas fa-trash"></i> حذف
-                    </button>
-                </td>
-            `;
+            
+            // العمود الأول: الرقم
+            const cellNum = document.createElement('td');
+            cellNum.textContent = productCount;
+            row.appendChild(cellNum);
+            
+            // العمود الثاني: اسم المنتج (select)
+            const cellProduct = document.createElement('td');
+            const productDiv = document.createElement('div');
+            productDiv.className = 'product-select';
+            
+            const select = document.createElement('select');
+            select.className = 'product-name';
+            let options = '<option value="">اختر منتج</option>';
+            baseProducts.forEach(product => {
+                options += `<option value="${product}">${product}</option>`;
+            });
+            select.innerHTML = options;
+            
+            const productSpan = document.createElement('span');
+            productSpan.className = 'print-value';
+            productSpan.style.display = 'none';
+            
+            productDiv.appendChild(select);
+            productDiv.appendChild(productSpan);
+            cellProduct.appendChild(productDiv);
+            row.appendChild(cellProduct);
+            
+            // العمود الثالث: السماكة
+            const cellThick = document.createElement('td');
+            const thickInput = document.createElement('input');
+            thickInput.type = 'number';
+            thickInput.className = 'thickness';
+            thickInput.value = '0';
+            thickInput.min = '0';
+            thickInput.step = '0.1';
+            const thickSpan = document.createElement('span');
+            thickSpan.className = 'print-value';
+            thickSpan.style.display = 'none';
+            thickSpan.textContent = '0';
+            cellThick.appendChild(thickInput);
+            cellThick.appendChild(thickSpan);
+            row.appendChild(cellThick);
+            
+            // العمود الرابع: الكمية
+            const cellQty = document.createElement('td');
+            const qtyInput = document.createElement('input');
+            qtyInput.type = 'number';
+            qtyInput.className = 'quantity';
+            qtyInput.value = '1';
+            qtyInput.min = '1';
+            const qtySpan = document.createElement('span');
+            qtySpan.className = 'print-value';
+            qtySpan.style.display = 'none';
+            qtySpan.textContent = '1';
+            cellQty.appendChild(qtyInput);
+            cellQty.appendChild(qtySpan);
+            row.appendChild(cellQty);
+            
+            // العمود الخامس: السعر
+            const cellPrice = document.createElement('td');
+            const priceInput = document.createElement('input');
+            priceInput.type = 'number';
+            priceInput.className = 'price';
+            priceInput.value = '0.00';
+            priceInput.min = '0';
+            priceInput.step = '0.01';
+            const priceSpan = document.createElement('span');
+            priceSpan.className = 'print-value';
+            priceSpan.style.display = 'none';
+            priceSpan.textContent = '0.00';
+            cellPrice.appendChild(priceInput);
+            cellPrice.appendChild(priceSpan);
+            row.appendChild(cellPrice);
+            
+            // العمود السادس: الخصم
+            const cellDisc = document.createElement('td');
+            const discInput = document.createElement('input');
+            discInput.type = 'number';
+            discInput.className = 'discount';
+            discInput.value = '0';
+            discInput.min = '0';
+            discInput.max = '100';
+            const discSpan = document.createElement('span');
+            discSpan.className = 'print-value';
+            discSpan.style.display = 'none';
+            discSpan.textContent = '0';
+            cellDisc.appendChild(discInput);
+            cellDisc.appendChild(discSpan);
+            row.appendChild(cellDisc);
+            
+            // العمود السابع: المجموع (نص فقط)
+            const cellTotal = document.createElement('td');
+            cellTotal.className = 'total';
+            cellTotal.textContent = '0.00';
+            row.appendChild(cellTotal);
+            
+            // العمود الثامن: الإجراءات (زر الحذف)
+            const cellActions = document.createElement('td');
+            cellActions.className = 'no-print';
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn btn-danger remove-product';
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i> حذف';
+            cellActions.appendChild(deleteBtn);
+            row.appendChild(cellActions);
+            
             tbody.appendChild(row);
             
-            const inputs = row.querySelectorAll('.quantity, .price, .discount, .product-name, .thickness');
-            inputs.forEach(input => {
-                input.addEventListener('input', function() {
-                    calculateRowTotal(this.closest('tr'));
-                    calculateTotals();
-                    updatePaymentBalance();
-                });
+            // دالة لتحديث الـ span من قيمة الإدخال
+            function updateSpanFromInput(input, span) {
+                span.textContent = input.value;
+            }
+            
+            // ربط الأحداث
+            thickInput.addEventListener('input', function() {
+                thickSpan.textContent = this.value;
+                calculateRowTotal(row);
+                calculateTotals();
+                updatePaymentBalance();
             });
             
-            row.querySelector('.remove-product').addEventListener('click', function() {
+            qtyInput.addEventListener('input', function() {
+                qtySpan.textContent = this.value;
+                calculateRowTotal(row);
+                calculateTotals();
+                updatePaymentBalance();
+            });
+            
+            priceInput.addEventListener('input', function() {
+                priceSpan.textContent = this.value;
+                calculateRowTotal(row);
+                calculateTotals();
+                updatePaymentBalance();
+            });
+            
+            discInput.addEventListener('input', function() {
+                discSpan.textContent = this.value;
+                calculateRowTotal(row);
+                calculateTotals();
+                updatePaymentBalance();
+            });
+            
+            select.addEventListener('change', function() {
+                productSpan.textContent = this.options[this.selectedIndex]?.text || '';
+                calculateTotals();
+                updatePaymentBalance();
+            });
+            
+            deleteBtn.addEventListener('click', function() {
                 row.remove();
                 renumberRows();
                 calculateTotals();
                 updatePaymentBalance();
             });
+            
+            // تحديث أولي للـ spans
+            thickSpan.textContent = thickInput.value;
+            qtySpan.textContent = qtyInput.value;
+            priceSpan.textContent = priceInput.value;
+            discSpan.textContent = discInput.value;
+            productSpan.textContent = select.options[select.selectedIndex]?.text || '';
             
             calculateRowTotal(row);
         }
@@ -2485,45 +2829,87 @@
             loadClientsList();
             updateDashboard();
         }
-        
         function loadClientsList() {
-            const clientList = document.getElementById('client-list');
-            clientList.innerHTML = '';
-            
-            if (clients.length === 0) {
-                clientList.innerHTML = '<div class="client-item">لا توجد عملاء مسجلين</div>';
-                return;
-            }
-            
-            clients.forEach(client => {
-                const item = document.createElement('div');
-                item.className = 'client-item';
-                
-                const balanceClass = client.balance > 0 ? 'balance-negative' : 
-                                   client.balance < 0 ? 'balance-positive' : '';
-                
-                item.innerHTML = `
-                    <div><strong>${client.name}</strong></div>
-                    <div>${client.address || 'لا يوجد عنوان'}</div>
-                    <div>${client.phone || 'لا يوجد هاتف'}</div>
-                    <div class="client-financial-info ${balanceClass}">
-                        الرصيد: ${(client.balance || 0).toFixed(2)} دينار
-                        ${client.balance > 0 ? ' (مدين)' : client.balance < 0 ? ' (دائن)' : ''}
-                    </div>
-                    <button class="btn" style="margin-top: 10px; width: 100%;" data-client-name="${client.name}">
-                        <i class="fas fa-eye"></i> عرض الفواتير والدفعات
-                    </button>
-                `;
-                
-                item.querySelector('button').addEventListener('click', function() {
-                    const clientName = this.getAttribute('data-client-name');
-                    viewClientInvoices(clientName);
-                });
-                
-                clientList.appendChild(item);
-            });
-        }
+    const clientList = document.getElementById('client-list');
+    clientList.innerHTML = '';
+    
+    if (clients.length === 0) {
+        clientList.innerHTML = '<div class="client-item">لا توجد عملاء مسجلين</div>';
+        return;
+    }
+    
+    clients.forEach(client => {
+        const item = document.createElement('div');
+        item.className = 'client-item';
         
+        const balanceClass = client.balance > 0 ? 'balance-negative' : 
+                           client.balance < 0 ? 'balance-positive' : '';
+        
+        item.innerHTML = `
+            <div><strong>${client.name}</strong></div>
+            <div>${client.address || 'لا يوجد عنوان'}</div>
+            <div>${client.phone || 'لا يوجد هاتف'}</div>
+            <div class="client-financial-info ${balanceClass}">
+                الرصيد: ${(client.balance || 0).toFixed(2)} دينار
+                ${client.balance > 0 ? ' (مدين)' : client.balance < 0 ? ' (دائن)' : ''}
+            </div>
+            <div style="display: flex; gap: 5px; margin-top: 10px;">
+                <button class="btn view-client-invoices" style="flex: 1;" data-client-name="${client.name}">
+                    <i class="fas fa-eye"></i> عرض
+                </button>
+                <button class="btn btn-danger delete-client" style="flex: 0 0 auto;" data-client-name="${client.name}">
+                    <i class="fas fa-trash"></i> حذف
+                </button>
+            </div>
+        `;
+        
+        item.querySelector('.view-client-invoices').addEventListener('click', function() {
+            const clientName = this.getAttribute('data-client-name');
+            viewClientInvoices(clientName);
+        });
+        
+        item.querySelector('.delete-client').addEventListener('click', function() {
+            const clientName = this.getAttribute('data-client-name');
+            deleteSingleClient(clientName);
+        });
+        
+        clientList.appendChild(item);
+    });
+}
+        function deleteSingleClient(clientName) {
+    // طلب كلمة المرور
+    const password = prompt('يرجى إدخال كلمة المرور لحذف العميل وجميع فواتيره ودفعاته:');
+    if (password !== DELETE_PASSWORD) {
+        showNotification('كلمة المرور غير صحيحة', 'error');
+        return;
+    }
+    
+    // حذف العميل من مصفوفة clients
+    clients = clients.filter(client => client.name !== clientName);
+    localStorage.setItem('clients', JSON.stringify(clients));
+    
+    // حذف جميع الفواتير المرتبطة بهذا العميل
+    invoices = invoices.filter(invoice => invoice.client.name !== clientName);
+    localStorage.setItem('invoices', JSON.stringify(invoices));
+    
+    // حذف جميع سجل المشتريات المرتبطة بهذا العميل
+    purchaseHistory = purchaseHistory.filter(purchase => purchase.clientName !== clientName);
+    localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+    
+    // تحديث العرض
+    loadClientsList();
+    loadInvoicesHistory(); // تحديث سجل الفواتير
+    loadPurchaseHistory(); // تحديث سجل المشتريات
+    
+    // إخفاء قسم فواتير العميل إذا كان معروضاً لهذا العميل
+    if (currentViewingClient === clientName) {
+        document.getElementById('client-invoices-section').style.display = 'none';
+        currentViewingClient = null;
+    }
+    
+    showNotification(`تم حذف العميل ${clientName} وجميع فواتيره ودفعاته بنجاح`);
+    updateDashboard();
+}
         function viewClientInvoices(clientName) {
             currentViewingClient = clientName;
             const clientInvoicesSection = document.getElementById('client-invoices-section');
@@ -2631,50 +3017,60 @@
             });
         }
         
-        function addPayment() {
-            const amount = parseFloat(document.getElementById('payment-amount').value) || 0;
-            const method = document.getElementById('payment-method-select').value;
-            
-            if (amount <= 0) {
-                showNotification('يرجى إدخال مبلغ صحيح', 'error');
-                return;
-            }
-            
-            if (!currentViewingClient) {
-                showNotification('لم يتم تحديد عميل', 'error');
-                return;
-            }
-            
-            const client = clients.find(c => c.name === currentViewingClient);
-            if (!client) {
-                showNotification('لم يتم العثور على العميل', 'error');
-                return;
-            }
-            
-            const payment = {
-                id: Date.now().toString(),
-                date: new Date().toISOString(),
-                amount: amount,
-                method: method
-            };
-            
-            if (!client.payments) {
-                client.payments = [];
-            }
-            
-            client.payments.push(payment);
-            
-            client.balance = (client.balance || 0) - amount;
-            
-            localStorage.setItem('clients', JSON.stringify(clients));
-            
-            showNotification('تم إضافة الدفعة بنجاح');
-            
-            document.getElementById('payment-form').style.display = 'none';
-            document.getElementById('payment-amount').value = '0.00';
-            
-            viewClientInvoices(currentViewingClient);
-        }
+        // ------------------- دوال إدارة العملاء (معدلة لخصم الدفعة من الرصيد) -------------------
+function addPayment() {
+    const amount = parseFloat(document.getElementById('payment-amount').value) || 0;
+    const method = document.getElementById('payment-method-select').value;
+    
+    if (amount <= 0) {
+        showNotification('يرجى إدخال مبلغ صحيح', 'error');
+        return;
+    }
+    
+    if (!currentViewingClient) {
+        showNotification('لم يتم تحديد عميل', 'error');
+        return;
+    }
+    
+    // البحث عن العميل في مصفوفة clients
+    const clientIndex = clients.findIndex(c => c.name === currentViewingClient);
+    if (clientIndex === -1) {
+        showNotification('لم يتم العثور على العميل', 'error');
+        return;
+    }
+    
+    const client = clients[clientIndex];
+    
+    // إنشاء كائن الدفعة
+    const payment = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        amount: amount,
+        method: method
+    };
+    
+    // إضافة الدفعة إلى سجل مدفوعات العميل
+    if (!client.payments) {
+        client.payments = [];
+    }
+    client.payments.push(payment);
+    
+    // خصم المبلغ من رصيد العميل (الرصيد الحالي)
+    // الرصيد الموجب يعني أن العميل مدين (عليه دين)، لذا الدفعة تقلل الرصيد
+    client.balance = (client.balance || 0) - amount;
+    
+    // حفظ التغييرات في localStorage
+    localStorage.setItem('clients', JSON.stringify(clients));
+    
+    // تحديث عرض معلومات العميل
+    viewClientInvoices(currentViewingClient);
+    
+    showNotification('تم إضافة الدفعة بنجاح وخصم المبلغ من الرصيد');
+    
+    // إخفاء نموذج الدفع وإعادة تعيين حقل المبلغ
+    document.getElementById('payment-form').style.display = 'none';
+    document.getElementById('payment-amount').value = '0.00';
+}
         
         function filterClients(searchTerm) {
             const clientItems = document.querySelectorAll('.client-item');
@@ -3767,6 +4163,7 @@
                 } else if (this.getAttribute('data-report') === 'monthly') {
                     loadMonthlyReport();
                 } else if (this.getAttribute('data-report') === 'annual') {
+                    
                     loadAnnualReport();
                 }
             });
