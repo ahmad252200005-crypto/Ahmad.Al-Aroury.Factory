@@ -397,6 +397,28 @@
             font-weight: bold;
         }
         
+        /* حقول الشيك */
+        .check-fields {
+            background: #f0f7ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid #b8daff;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .check-fields input, .check-fields button {
+            margin: 0;
+        }
+        .check-image-preview {
+            max-width: 150px;
+            max-height: 150px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        
         .remaining-balance {
             font-size: 18px;
             font-weight: bold;
@@ -543,11 +565,12 @@
             display: flex;
             gap: 10px;
             margin-bottom: 10px;
-            align-items: center;
+            align-items: flex-start;
+            flex-wrap: wrap;
         }
         
-        .payment-row input, .payment-row select {
-            flex: 1;
+        .payment-row > * {
+            flex: 1 1 150px;
         }
         
         .payment-summary {
@@ -1155,6 +1178,14 @@
         margin: 0 !important;
         font-weight: normal !important;
     }
+    
+    /* إظهار صور الشيكات في الطباعة */
+    .check-image-print {
+        max-width: 200px;
+        max-height: 200px;
+        margin: 10px 0;
+        border: 1px solid #ccc;
+    }
 }
       /* =========================================
    تطوير الهاتف (نمط الشبكة الحديث - App Style)
@@ -1568,6 +1599,12 @@
                                 <option value="bank">تحويل بنكي</option>
                             </select>
                             <input type="number" class="payment-amount" placeholder="المبلغ" min="0" step="0.01">
+                            <div class="check-fields-multiple" style="display:none; grid-column:span 3; background:#f0f7ff; padding:10px; border-radius:8px;">
+                                <div><strong>رقم الشيك:</strong> <input type="text" class="check-number" placeholder="رقم الشيك"></div>
+                                <div><strong>تاريخ الصرف:</strong> <input type="date" class="check-date"></div>
+                                <div><strong>صورة الشيك:</strong> <input type="file" class="check-image" accept="image/*"></div>
+                                <div><img class="check-preview" style="max-width:100px; max-height:100px; display:none;"></div>
+                            </div>
                             <button class="btn btn-danger remove-payment">
                                 <i class="fas fa-trash"></i> حذف
                             </button>
@@ -1605,6 +1642,14 @@
                             <button class="btn no-print" id="set-full-payment" style="width: auto;">
                                 <i class="fas fa-check-circle"></i> دفع المبلغ كاملاً
                             </button>
+                        </div>
+                        
+                        <!-- حقول الشيك (تظهر عند اختيار شيك) -->
+                        <div id="check-fields-single" class="check-fields" style="display: none;">
+                            <div><strong>رقم الشيك:</strong> <input type="text" id="check-number-single" placeholder="رقم الشيك"></div>
+                            <div><strong>تاريخ الصرف:</strong> <input type="date" id="check-date-single"></div>
+                            <div><strong>صورة الشيك:</strong> <input type="file" id="check-image-single" accept="image/*"></div>
+                            <div><img id="check-preview-single" class="check-image-preview" style="display: none;"></div>
                         </div>
                     </div>
                 </div>
@@ -2397,6 +2442,31 @@
             }
         }
         
+        // إظهار/إخفاء حقول الشيك عند تغيير طريقة الدفع (للدفع الفردي)
+        document.querySelectorAll('input[name="payment-method"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'check') {
+                    document.getElementById('check-fields-single').style.display = 'grid';
+                } else {
+                    document.getElementById('check-fields-single').style.display = 'none';
+                }
+            });
+        });
+        
+        // معاينة صورة الشيك (فردي)
+        document.getElementById('check-image-single').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    const preview = document.getElementById('check-preview-single');
+                    preview.src = ev.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
         function setupMultiplePayments() {
             document.getElementById('add-payment-method').addEventListener('click', function() {
                 const paymentSection = document.getElementById('multiple-payments-section');
@@ -2410,6 +2480,12 @@
                         <option value="bank">تحويل بنكي</option>
                     </select>
                     <input type="number" class="payment-amount" placeholder="المبلغ" min="0" step="0.01">
+                    <div class="check-fields-multiple" style="display:none; grid-column:span 3; background:#f0f7ff; padding:10px; border-radius:8px;">
+                        <div><strong>رقم الشيك:</strong> <input type="text" class="check-number" placeholder="رقم الشيك"></div>
+                        <div><strong>تاريخ الصرف:</strong> <input type="date" class="check-date"></div>
+                        <div><strong>صورة الشيك:</strong> <input type="file" class="check-image" accept="image/*"></div>
+                        <div><img class="check-preview" style="max-width:100px; max-height:100px; display:none;"></div>
+                    </div>
                     <button class="btn btn-danger remove-payment">
                         <i class="fas fa-trash"></i> حذف
                     </button>
@@ -2417,29 +2493,67 @@
                 
                 paymentSection.insertBefore(paymentRow, this);
                 
-                paymentRow.querySelector('.remove-payment').addEventListener('click', function() {
-                    paymentRow.remove();
-                    updateMultiplePaymentsTotal();
+                const methodSelect = paymentRow.querySelector('.payment-method-select');
+                const checkFields = paymentRow.querySelector('.check-fields-multiple');
+                const amountInput = paymentRow.querySelector('.payment-amount');
+                const removeBtn = paymentRow.querySelector('.remove-payment');
+                
+                methodSelect.addEventListener('change', function() {
+                    checkFields.style.display = this.value === 'check' ? 'block' : 'none';
                 });
                 
-                paymentRow.querySelector('.payment-amount').addEventListener('input', function() {
-                    updateMultiplePaymentsTotal();
-                });
-            });
-            
-            const firstPaymentRow = document.querySelector('.payment-row');
-            if (firstPaymentRow) {
-                firstPaymentRow.querySelector('.remove-payment').addEventListener('click', function() {
+                amountInput.addEventListener('input', updateMultiplePaymentsTotal);
+                
+                removeBtn.addEventListener('click', function() {
                     if (document.querySelectorAll('.payment-row').length > 1) {
-                        firstPaymentRow.remove();
+                        paymentRow.remove();
                         updateMultiplePaymentsTotal();
                     } else {
                         showNotification('يجب أن تبقى طريقة دفع واحدة على الأقل', 'error');
                     }
                 });
                 
-                firstPaymentRow.querySelector('.payment-amount').addEventListener('input', function() {
-                    updateMultiplePaymentsTotal();
+                paymentRow.querySelector('.check-image').addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(ev) {
+                            paymentRow.querySelector('.check-preview').src = ev.target.result;
+                            paymentRow.querySelector('.check-preview').style.display = 'block';
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            });
+            
+            // تعامل مع الصف الأول الموجود
+            const firstRow = document.querySelector('.payment-row');
+            if (firstRow) {
+                const methodSelect = firstRow.querySelector('.payment-method-select');
+                const checkFields = firstRow.querySelector('.check-fields-multiple');
+                const amountInput = firstRow.querySelector('.payment-amount');
+                methodSelect.addEventListener('change', function() {
+                    checkFields.style.display = this.value === 'check' ? 'block' : 'none';
+                });
+                amountInput.addEventListener('input', updateMultiplePaymentsTotal);
+                firstRow.querySelector('.remove-payment').addEventListener('click', function() {
+                    if (document.querySelectorAll('.payment-row').length > 1) {
+                        firstRow.remove();
+                        updateMultiplePaymentsTotal();
+                    } else {
+                        showNotification('يجب أن تبقى طريقة دفع واحدة على الأقل', 'error');
+                    }
+                });
+                firstRow.querySelector('.check-image').addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(ev) {
+                            firstRow.querySelector('.check-preview').src = ev.target.result;
+                            firstRow.querySelector('.check-preview').style.display = 'block';
+                        };
+                        reader.readAsDataURL(file);
+                    }
                 });
             }
         }
@@ -2526,7 +2640,14 @@
                     const method = row.querySelector('.payment-method-select').value;
                     const amount = parseFloat(row.querySelector('.payment-amount').value) || 0;
                     if (amount > 0) {
-                        payments.push({ method, amount });
+                        let checkDetails = null;
+                        if (method === 'check') {
+                            const checkNumber = row.querySelector('.check-number')?.value || '';
+                            const checkDate = row.querySelector('.check-date')?.value || '';
+                            const checkImage = row.querySelector('.check-preview')?.src || '';
+                            checkDetails = { checkNumber, checkDate, checkImage };
+                        }
+                        payments.push({ method, amount, checkDetails });
                         totalPaid += amount;
                     }
                 });
@@ -2534,7 +2655,14 @@
             } else {
                 const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
                 const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
-                paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: totalDue - paidAmount };
+                let checkDetails = null;
+                if (paymentMethod === 'check') {
+                    const checkNumber = document.getElementById('check-number-single').value || '';
+                    const checkDate = document.getElementById('check-date-single').value || '';
+                    const checkImage = document.getElementById('check-preview-single').src || '';
+                    checkDetails = { checkNumber, checkDate, checkImage };
+                }
+                paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: totalDue - paidAmount, checkDetails };
             }
             
             const selectedDate = document.getElementById('invoice-date-input').value;
@@ -2618,6 +2746,7 @@
                 calculateRowTotal(lastRow);
             });
             
+            // استعادة بيانات الدفع
             if (invoice.payment.type === 'multiple') {
                 document.getElementById('enable-multiple-payments').checked = true;
                 document.getElementById('multiple-payments-section').style.display = 'block';
@@ -2628,6 +2757,19 @@
                 invoice.payment.payments.forEach(payment => {
                     const paymentRow = document.createElement('div');
                     paymentRow.className = 'payment-row';
+                    let checkFieldsHTML = '';
+                    if (payment.method === 'check') {
+                        checkFieldsHTML = `
+                            <div class="check-fields-multiple" style="display:block; grid-column:span 3; background:#f0f7ff; padding:10px; border-radius:8px;">
+                                <div><strong>رقم الشيك:</strong> <input type="text" class="check-number" value="${payment.checkDetails?.checkNumber || ''}"></div>
+                                <div><strong>تاريخ الصرف:</strong> <input type="date" class="check-date" value="${payment.checkDetails?.checkDate || ''}"></div>
+                                <div><strong>صورة الشيك:</strong> <input type="file" class="check-image" accept="image/*"></div>
+                                <div><img class="check-preview" style="max-width:100px; max-height:100px; ${payment.checkDetails?.checkImage ? 'display:block;' : 'display:none;'}" src="${payment.checkDetails?.checkImage || ''}"></div>
+                            </div>
+                        `;
+                    } else {
+                        checkFieldsHTML = `<div class="check-fields-multiple" style="display:none;"></div>`;
+                    }
                     paymentRow.innerHTML = `
                         <select class="payment-method-select">
                             <option value="cash" ${payment.method === 'cash' ? 'selected' : ''}>كاش</option>
@@ -2636,11 +2778,44 @@
                             <option value="bank" ${payment.method === 'bank' ? 'selected' : ''}>تحويل بنكي</option>
                         </select>
                         <input type="number" class="payment-amount" placeholder="المبلغ" min="0" step="0.01" value="${payment.amount}">
+                        ${checkFieldsHTML}
                         <button class="btn btn-danger remove-payment">
                             <i class="fas fa-trash"></i> حذف
                         </button>
                     `;
                     document.getElementById('multiple-payments-section').appendChild(paymentRow);
+                    
+                    // إعادة ربط الأحداث
+                    const methodSelect = paymentRow.querySelector('.payment-method-select');
+                    const checkFields = paymentRow.querySelector('.check-fields-multiple');
+                    const amountInput = paymentRow.querySelector('.payment-amount');
+                    const removeBtn = paymentRow.querySelector('.remove-payment');
+                    
+                    methodSelect.addEventListener('change', function() {
+                        checkFields.style.display = this.value === 'check' ? 'block' : 'none';
+                    });
+                    
+                    amountInput.addEventListener('input', updateMultiplePaymentsTotal);
+                    removeBtn.addEventListener('click', function() {
+                        if (document.querySelectorAll('.payment-row').length > 1) {
+                            paymentRow.remove();
+                            updateMultiplePaymentsTotal();
+                        } else {
+                            showNotification('يجب أن تبقى طريقة دفع واحدة على الأقل', 'error');
+                        }
+                    });
+                    
+                    paymentRow.querySelector('.check-image')?.addEventListener('change', function(e) {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = function(ev) {
+                                paymentRow.querySelector('.check-preview').src = ev.target.result;
+                                paymentRow.querySelector('.check-preview').style.display = 'block';
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
                 });
                 
                 const addButton = document.createElement('button');
@@ -2661,6 +2836,18 @@
                 document.getElementById('single-payment-section').style.display = 'block';
                 document.querySelector(`input[name="payment-method"][value="${invoice.payment.method}"]`).checked = true;
                 document.getElementById('paid-amount').value = invoice.payment.paidAmount;
+                
+                if (invoice.payment.method === 'check' && invoice.payment.checkDetails) {
+                    document.getElementById('check-fields-single').style.display = 'grid';
+                    document.getElementById('check-number-single').value = invoice.payment.checkDetails.checkNumber || '';
+                    document.getElementById('check-date-single').value = invoice.payment.checkDetails.checkDate || '';
+                    if (invoice.payment.checkDetails.checkImage) {
+                        document.getElementById('check-preview-single').src = invoice.payment.checkDetails.checkImage;
+                        document.getElementById('check-preview-single').style.display = 'block';
+                    }
+                } else {
+                    document.getElementById('check-fields-single').style.display = 'none';
+                }
             }
             
             calculateTotals();
@@ -2700,6 +2887,12 @@
                         <option value="bank">تحويل بنكي</option>
                     </select>
                     <input type="number" class="payment-amount" placeholder="المبلغ" min="0" step="0.01">
+                    <div class="check-fields-multiple" style="display:none; grid-column:span 3; background:#f0f7ff; padding:10px; border-radius:8px;">
+                        <div><strong>رقم الشيك:</strong> <input type="text" class="check-number" placeholder="رقم الشيك"></div>
+                        <div><strong>تاريخ الصرف:</strong> <input type="date" class="check-date"></div>
+                        <div><strong>صورة الشيك:</strong> <input type="file" class="check-image" accept="image/*"></div>
+                        <div><img class="check-preview" style="max-width:100px; max-height:100px; display:none;"></div>
+                    </div>
                     <button class="btn btn-danger remove-payment">
                         <i class="fas fa-trash"></i> حذف
                     </button>
@@ -2958,14 +3151,29 @@
                     if (invoice.payment.type === 'multiple') {
                         paymentHTML = `
                             <div><strong>طرق الدفع:</strong></div>
-                            ${invoice.payment.payments.map(payment => `
-                                <div style="margin-right: 20px;">${getPaymentMethodText(payment.method)}: ${payment.amount.toFixed(2)} دينار</div>
-                            `).join('')}
+                            ${invoice.payment.payments.map(payment => {
+                                let checkInfo = '';
+                                if (payment.method === 'check' && payment.checkDetails) {
+                                    checkInfo = `<br>رقم الشيك: ${payment.checkDetails.checkNumber} - تاريخ الصرف: ${payment.checkDetails.checkDate}`;
+                                    if (payment.checkDetails.checkImage) {
+                                        checkInfo += `<br><img src="${payment.checkDetails.checkImage}" style="max-width:100px; max-height:100px;">`;
+                                    }
+                                }
+                                return `<div style="margin-right: 20px;">${getPaymentMethodText(payment.method)}: ${payment.amount.toFixed(2)} دينار ${checkInfo}</div>`;
+                            }).join('')}
                         `;
                     } else {
                         paymentHTML = `
                             <div><strong>طريقة الدفع:</strong> ${getPaymentMethodText(invoice.payment.method)}</div>
+                            <div>المبلغ المدفوع: ${invoice.payment.paidAmount.toFixed(2)} دينار</div>
                         `;
+                        if (invoice.payment.method === 'check' && invoice.payment.checkDetails) {
+                            paymentHTML += `<div>رقم الشيك: ${invoice.payment.checkDetails.checkNumber}</div>`;
+                            paymentHTML += `<div>تاريخ الصرف: ${invoice.payment.checkDetails.checkDate}</div>`;
+                            if (invoice.payment.checkDetails.checkImage) {
+                                paymentHTML += `<div><img src="${invoice.payment.checkDetails.checkImage}" style="max-width:100px; max-height:100px;"></div>`;
+                            }
+                        }
                     }
                     
                     invoiceDiv.innerHTML = `
@@ -2978,7 +3186,6 @@
                         <div class="total-section">
                             <div>المجموع الكلي: ${invoice.grandTotal.toFixed(2)} دينار</div>
                             ${paymentHTML}
-                            <div>المبلغ المدفوع: ${invoice.payment.paidAmount.toFixed(2)} دينار</div>
                             <div>المبلغ المتبقي: ${invoice.payment.remainingBalance.toFixed(2)} دينار</div>
                             <div>الحالة: ${invoice.status}</div>
                         </div>
@@ -3140,6 +3347,26 @@ function addPayment() {
                     `;
                 });
                 
+                let paymentDetails = '';
+                if (invoice.payment.type === 'multiple') {
+                    paymentDetails = '<div><strong>طرق الدفع:</strong></div>';
+                    invoice.payment.payments.forEach(p => {
+                        paymentDetails += `<div style="margin-right:20px;">${getPaymentMethodText(p.method)}: ${p.amount.toFixed(2)} دينار`;
+                        if (p.method === 'check' && p.checkDetails) {
+                            paymentDetails += `<br> رقم الشيك: ${p.checkDetails.checkNumber || ''} - تاريخ الصرف: ${p.checkDetails.checkDate || ''}`;
+                            if (p.checkDetails.checkImage) paymentDetails += ` <br> <img src="${p.checkDetails.checkImage}" style="max-width:100px; max-height:100px;" class="check-image-print">`;
+                        }
+                        paymentDetails += '</div>';
+                    });
+                } else {
+                    paymentDetails = `<div><strong>طريقة الدفع:</strong> ${getPaymentMethodText(invoice.payment.method)} - المبلغ المدفوع: ${invoice.payment.paidAmount.toFixed(2)} دينار`;
+                    if (invoice.payment.method === 'check' && invoice.payment.checkDetails) {
+                        paymentDetails += `<br> رقم الشيك: ${invoice.payment.checkDetails.checkNumber || ''} - تاريخ الصرف: ${invoice.payment.checkDetails.checkDate || ''}`;
+                        if (invoice.payment.checkDetails.checkImage) paymentDetails += `<br> <img src="${invoice.payment.checkDetails.checkImage}" style="max-width:100px; max-height:100px;" class="check-image-print">`;
+                    }
+                    paymentDetails += '</div>';
+                }
+                
                 invoiceDiv.innerHTML = `
                     <div class="invoice-header-small">
                         <div><strong>${invoice.id}</strong></div>
@@ -3150,6 +3377,8 @@ function addPayment() {
                     ${productsHTML}
                     <div class="total-section">
                         <div>المجموع الكلي: ${invoice.grandTotal.toFixed(2)} دينار</div>
+                        ${paymentDetails}
+                        <div>المبلغ المتبقي: ${invoice.payment.remainingBalance.toFixed(2)} دينار</div>
                         <div>الحالة: ${invoice.status}</div>
                     </div>
                     <button class="btn btn-secondary edit-invoice" data-invoice-id="${invoice.id}">
@@ -4163,7 +4392,6 @@ function addPayment() {
                 } else if (this.getAttribute('data-report') === 'monthly') {
                     loadMonthlyReport();
                 } else if (this.getAttribute('data-report') === 'annual') {
-                    
                     loadAnnualReport();
                 }
             });
