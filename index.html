@@ -2271,6 +2271,8 @@
         // متغيرات التقسيم للتقارير
         let currentSalesPage = 1;
         const salesPerPage = 10;
+        let lastSyncTimestamp = 0;
+        let autoRefreshTimer = null;
         
         // قائمة المنتجات الأساسية
         const baseProducts = [
@@ -3687,6 +3689,41 @@ function addPayment() {
             document.getElementById('total-invoices').textContent = invoices.length;
             document.getElementById('total-purchases').textContent = purchaseHistory.length;
         }
+
+        async function refreshFromStorage() {
+            try {
+                const storedClients = JSON.parse(localStorage.getItem('clients')) || [];
+                const storedInvoices = JSON.parse(localStorage.getItem('invoices')) || [];
+                const storedPurchases = JSON.parse(localStorage.getItem('purchaseHistory')) || [];
+                const storedSalaries = JSON.parse(localStorage.getItem('employeeSalaries')) || [];
+
+                if (JSON.stringify(storedClients) !== JSON.stringify(clients) ||
+                    JSON.stringify(storedInvoices) !== JSON.stringify(invoices) ||
+                    JSON.stringify(storedPurchases) !== JSON.stringify(purchaseHistory) ||
+                    JSON.stringify(storedSalaries) !== JSON.stringify(employeeSalaries)) {
+                    clients = storedClients;
+                    invoices = storedInvoices;
+                    purchaseHistory = storedPurchases;
+                    employeeSalaries = storedSalaries;
+                    loadClientsList();
+                    loadInvoicesHistory();
+                    loadPurchaseHistory();
+                    loadEmployeeSalaries();
+                    loadProductSalesTotals();
+                    updateDashboard();
+                    lastSyncTimestamp = Date.now();
+                }
+            } catch (err) {
+                console.error('فشل التحديث التلقائي:', err);
+            }
+        }
+
+        function startAutoRefresh() {
+            if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+            autoRefreshTimer = setInterval(() => {
+                refreshFromStorage();
+            }, 3000);
+        }
         
         // ------------------- دوال كشوف العمال (موجزة) -------------------
         function calculateSalary() {
@@ -4550,6 +4587,7 @@ async function saveSalary() {
             loadReports();
             setupCalculator();
             updateDashboard();
+            startAutoRefresh();
         });
     </script>
 </body>
