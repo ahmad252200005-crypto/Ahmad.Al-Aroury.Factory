@@ -2154,6 +2154,30 @@
         // ==========================================
         // أ) دالة الـ POST - إرسال البيانات فور الحفظ
         // ==========================================
+        function normalizeCloudData(data) {
+            if (!data) return null;
+
+            if (Array.isArray(data)) {
+                return {
+                    clients: data,
+                    invoices: [],
+                    purchaseHistory: [],
+                    employeeSalaries: []
+                };
+            }
+
+            if (typeof data === 'object') {
+                return {
+                    clients: Array.isArray(data.clients) ? data.clients : [],
+                    invoices: Array.isArray(data.invoices) ? data.invoices : [],
+                    purchaseHistory: Array.isArray(data.purchaseHistory) ? data.purchaseHistory : [],
+                    employeeSalaries: Array.isArray(data.employeeSalaries) ? data.employeeSalaries : []
+                };
+            }
+
+            return null;
+        }
+
         async function sendToCloud(payload) {
             if (isFileProtocol()) {
                 console.warn("تم تخطي الربط السحابي لأن الصفحة مفتوحة من ملف محلي. افتحها من خادم أو localhost حتى يعمل الربط.");
@@ -2184,11 +2208,17 @@
                     throw new Error(parsed.message || 'فشل الحفظ في السحابة');
                 }
 
-                if (parsed && parsed.data) {
-                    localStorage.setItem('clients', JSON.stringify(parsed.data.clients || []));
-                    localStorage.setItem('invoices', JSON.stringify(parsed.data.invoices || []));
-                    localStorage.setItem('purchaseHistory', JSON.stringify(parsed.data.purchaseHistory || []));
-                    localStorage.setItem('employeeSalaries', JSON.stringify(parsed.data.employeeSalaries || []));
+                const normalized = normalizeCloudData(parsed && parsed.data ? parsed.data : null);
+                if (normalized) {
+                    localStorage.setItem('clients', JSON.stringify(normalized.clients || []));
+                    localStorage.setItem('invoices', JSON.stringify(normalized.invoices || []));
+                    localStorage.setItem('purchaseHistory', JSON.stringify(normalized.purchaseHistory || []));
+                    localStorage.setItem('employeeSalaries', JSON.stringify(normalized.employeeSalaries || []));
+
+                    clients = normalized.clients || clients;
+                    invoices = normalized.invoices || invoices;
+                    purchaseHistory = normalized.purchaseHistory || purchaseHistory;
+                    employeeSalaries = normalized.employeeSalaries || employeeSalaries;
                 }
 
                 console.log("تم التحديث الفوري سحابياً!");
@@ -2214,16 +2244,18 @@
 
                 const text = await response.text();
                 const parsed = safeParseJson(text);
-                if (parsed && parsed.data) {
-                    localStorage.setItem('clients', JSON.stringify(parsed.data.clients || []));
-                    localStorage.setItem('invoices', JSON.stringify(parsed.data.invoices || []));
-                    localStorage.setItem('purchaseHistory', JSON.stringify(parsed.data.purchaseHistory || []));
-                    localStorage.setItem('employeeSalaries', JSON.stringify(parsed.data.employeeSalaries || []));
+                const normalized = normalizeCloudData(parsed && parsed.data ? parsed.data : null);
 
-                    clients = parsed.data.clients || [];
-                    invoices = parsed.data.invoices || [];
-                    purchaseHistory = parsed.data.purchaseHistory || [];
-                    employeeSalaries = parsed.data.employeeSalaries || [];
+                if (normalized) {
+                    localStorage.setItem('clients', JSON.stringify(normalized.clients || []));
+                    localStorage.setItem('invoices', JSON.stringify(normalized.invoices || []));
+                    localStorage.setItem('purchaseHistory', JSON.stringify(normalized.purchaseHistory || []));
+                    localStorage.setItem('employeeSalaries', JSON.stringify(normalized.employeeSalaries || []));
+
+                    clients = normalized.clients || [];
+                    invoices = normalized.invoices || [];
+                    purchaseHistory = normalized.purchaseHistory || [];
+                    employeeSalaries = normalized.employeeSalaries || [];
 
                     loadClientsList();
                     loadInvoicesHistory();
