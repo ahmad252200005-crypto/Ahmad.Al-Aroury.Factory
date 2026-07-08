@@ -2135,7 +2135,7 @@
     <script>
         // ========== الرابط السحابي ==========
         // قم بوضع رابط التطبيق الذي ستحصل عليه من Google Apps Script بعد النشر
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxSZ2qOw8cup1AJmlFCn2Ms1vik7G7Xw3kEPRW682HjFOC_RDckcr00bAefoBMwGedxPg/exec";
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyLF3DBfLJkbisfRZITCV4RJzCLLQWSr7XvAsRHElIh5mEPL59KgxTQlbCJuJ-lLOODyQ/exec";
 
         // ========== كلمة المرور ==========
         const DELETE_PASSWORD = "12345678";
@@ -2247,86 +2247,116 @@
         }
 
         // ========== جلب البيانات من السحابة (GET) ==========
-        function fetchClientsFromGoogleSheets() {
-            showNotification('جاري تحميل جميع البيانات من السحابة...', 'info');
+       function fetchClientsFromGoogleSheets() {
+    showNotification('جاري تحميل جميع البيانات من السحابة...', 'info');
 
-            fetch(GOOGLE_SCRIPT_URL)
-            .then(response => {
-                if (!response.ok) throw new Error('شبكة الاتصال غير مستقرة');
-                return response.json();
-            })
-            .then(data => {
-                if (data.status && data.status === 'error') {
-                    showNotification('فشل تحميل البيانات: ' + data.message, 'error');
-                    return;
-                }
-
-                // 1. تحديث العملاء
-                if (data.clients && Array.isArray(data.clients)) {
-                    clients = data.clients;
-                    localStorage.setItem('clients', JSON.stringify(clients));
-                    loadClientsList();
-                }
-
-                // 2. تحديث الفواتير (دمج مع المحلي)
-                if (data.invoices && Array.isArray(data.invoices)) {
-                    var localInvoices = JSON.parse(localStorage.getItem('invoices')) || [];
-                    var mergedInvoices = mergeInvoices(localInvoices, data.invoices);
-                    invoices = mergedInvoices;
-                    localStorage.setItem('invoices', JSON.stringify(invoices));
-                    loadInvoicesHistory();
-                }
-
-                // 3. تحديث المدفوعات (مزامنة مع العملاء)
-                if (data.payments && Array.isArray(data.payments)) {
-                    syncPaymentsWithClients(data.payments);
-                }
-
-                // 4. تحديث الرواتب
-                if (data.salaries && Array.isArray(data.salaries)) {
-                    employeeSalaries = data.salaries;
-                    localStorage.setItem('employeeSalaries', JSON.stringify(employeeSalaries));
-                    loadEmployeeSalaries();
-                }
-
-                updateDashboard();
-                showNotification('تم تحديث جميع البيانات سحابياً بنجاح!');
-            })
-            .catch(error => {
-                console.error('Error fetching data:', error);
-                clients = JSON.parse(localStorage.getItem('clients')) || [];
-                invoices = JSON.parse(localStorage.getItem('invoices')) || [];
-                employeeSalaries = JSON.parse(localStorage.getItem('employeeSalaries')) || [];
-                loadClientsList();
-                loadInvoicesHistory();
-                loadEmployeeSalaries();
-                updateDashboard();
-                showNotification('تعذر الاتصال، تم تحميل البيانات المحلية', 'error');
-            });
+    fetch(GOOGLE_SCRIPT_URL)
+    .then(response => {
+        if (!response.ok) throw new Error('شبكة الاتصال غير مستقرة');
+        return response.json();
+    })
+    .then(data => {
+        if (data.status && data.status === 'error') {
+            showNotification('فشل تحميل البيانات: ' + data.message, 'error');
+            return;
         }
 
-        // ========== دوال مساعدة للدمج ==========
-        function mergeInvoices(localList, serverList) {
-            var map = new Map();
-            localList.forEach(inv => map.set(inv.id, inv));
-            serverList.forEach(inv => map.set(inv.id, inv));
-            return Array.from(map.values());
-        }
-
-        function syncPaymentsWithClients(payments) {
-            var paymentMap = {};
-            payments.forEach(p => {
-                if (!paymentMap[p.clientName]) paymentMap[p.clientName] = 0;
-                paymentMap[p.clientName] += p.amount;
-            });
-            clients.forEach(client => {
-                if (paymentMap[client.name]) {
-                    client.balance = (client.balance || 0) - paymentMap[client.name];
-                }
-            });
+        // 1. تحديث العملاء
+        if (data.clients && Array.isArray(data.clients)) {
+            clients = data.clients;
             localStorage.setItem('clients', JSON.stringify(clients));
         }
 
+        // 2. تحديث الفواتير 
+        if (data.invoices && Array.isArray(data.invoices)) {
+            invoices = data.invoices;
+            localStorage.setItem('invoices', JSON.stringify(invoices));
+            loadInvoicesHistory();
+            
+            // إعادة بناء سجل المشتريات بناءً على الفواتير المستلمة
+            purchaseHistory = [];
+            invoices.forEach(inv => {
+                if(inv.products) {
+                    inv.products.forEach(p => {
+                        purchaseHistory.push({
+                            id: inv.id + Math.random(),
+                            date: inv.date,
+                            productName: p.productName,
+                            thickness: p.thickness || null,
+                            quantity: p.quantity,
+                            price: p.price,
+                            total: p.total,
+                            clientName: inv.clientName,
+                            invoiceId: inv.id
+                        });
+                    });
+                }
+            });
+            localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+        }
+
+        // 3. تحديث الرواتب
+        if (data.salaries && Array.isArray(data.salaries)) {
+            employeeSalaries = data.salaries;
+            localStorage.setItem('employeeSalaries', JSON.stringify(employeeSalaries));
+            loadEmployeeSalaries();
+        }
+
+        loadClientsList();
+        loadPurchaseHistory();
+        loadReports();
+        updateDashboard();
+        showNotification('تم مزامنة وتحديث البيانات مع الأجهزة الأخرى بنجاح!');
+    })
+    .catch(error => {
+        console.error('Error fetching data:', error);
+        clients = JSON.parse(localStorage.getItem('clients')) || [];
+        invoices = JSON.parse(localStorage.getItem('invoices')) || [];
+        purchaseHistory = JSON.parse(localStorage.getItem('purchaseHistory')) || [];
+        employeeSalaries = JSON.parse(localStorage.getItem('employeeSalaries')) || [];
+        loadClientsList();
+        loadInvoicesHistory();
+        loadPurchaseHistory();
+        loadEmployeeSalaries();
+        updateDashboard();
+        showNotification('تعذر الاتصال بالخادم، يعمل الآن بالوضع المحلي المتزامن', 'error');
+    });
+}
+
+        // ========== دوال مساعدة للدمج ==========
+       function mergeInvoices(localList, serverList) {
+    var map = new Map();
+    localList.forEach(inv => map.set(inv.id, inv));
+    serverList.forEach(inv => map.set(inv.id, inv));
+    return Array.from(map.values());
+}
+
+function syncPaymentsWithClients(payments) {
+    // نقوم أولاً بإعادة حساب أرصاد العملاء بناءً على المبيعات والمدفوعات السحابية
+    clients.forEach(client => {
+        let clientInvoices = invoices.filter(inv => inv.clientName === client.name);
+        let totalInvoiced = clientInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
+        let totalPaidInInvoices = clientInvoices.reduce((sum, inv) => sum + inv.paid, 0);
+        
+        let clientPayments = payments.filter(p => p.clientName === client.name);
+        let totalDirectPayments = clientPayments.reduce((sum, p) => sum + p.amount, 0);
+        
+        // الرصيد = (إجمالي الفواتير - ما سدد داخلياً) - المدفوعات المستقلة في السجل
+        client.balance = totalInvoicesSum(client.name) - totalPaidForClient(client.name);
+    });
+    localStorage.setItem('clients', JSON.stringify(clients));
+}
+
+// دالة مساعدة لحساب الديون بدقة
+function updateDashboard() {
+    document.getElementById('dashboard-invoices').textContent = invoices.length;
+    document.getElementById('dashboard-clients').textContent = clients.length;
+    document.getElementById('dashboard-purchases').textContent = purchaseHistory.length;
+
+    document.getElementById('total-clients').textContent = clients.length;
+    document.getElementById('total-invoices').textContent = invoices.length;
+    document.getElementById('total-purchases').textContent = purchaseHistory.length;
+}
         // ========== دوال إدارة المنتجات في الفاتورة ==========
         function addProductRow() {
             productCount++;
