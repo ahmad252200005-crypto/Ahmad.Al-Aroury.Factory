@@ -2134,53 +2134,91 @@
 
     <script>
         // ضع رابط تطبيق الويب (exec) الجديد الخاص بك هنا بعد النشر
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqt7MJG6HbLr3xNwDAZM4SFOYGpw_t1Z1fgOUK7R3FV0Y9M5rrotsxKuAA5r-dl9VZqQ/exec"; 
+        const GOOGLE_SCRIPT_URL = new URLSearchParams(window.location.search).get('api') ||
+            localStorage.getItem('cloudApiUrl') ||
+            "https://script.google.com/macros/s/AKfycbyqt7MJG6HbLr3xNwDAZM4SFOYGpw_t1Z1fgOUK7R3FV0Y9M5rrotsxKuAA5r-dl9VZqQ/exec";
 
-// ==========================================
-// أ) دالة الـ POST - إرسال البيانات فور الحفظ
-// ==========================================
-// التعديل المباشر لمنع حظر الـ CSP
-async function sendToCloud(payload) {
-    try {
-        const formData = new FormData();
-        formData.append('jsonData', JSON.stringify(payload));
-
-        // إرسال صريح ومباشر لا يخترق سياسات الـ CSP المحددة
-        await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'cors',
-            cache: 'no-cache', // تمنع تعليق البيانات المتصفح
-            body: formData
-        });
-        console.log("تم التحديث الفوري سحابياً!");
-    } catch (err) {
-        console.error("خطأ حماية أو اتصال:", err);
-    }
-}
-
-// ==========================================
-// ب) دالة الـ GET - جلب التقارير المالية فوراً
-// ==========================================
-async function fetchCloudReports() {
-    try {
-        console.log("جاري سحب أحدث التقارير المالية (GET)...");
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'GET',
-            mode: 'cors',
-            cache: 'no-cache' // قيد التعديل: تمنع حظر الحماية المتصفح
-        });
-        
-        const report = await response.json();
-        console.log("تم استقبال التقرير اللحظي:", report);
-        
-        // تحديث الأرقام مباشرة في واجهة موقعك
-        if (document.getElementById('daily-total-sales')) {
-            document.getElementById('daily-total-sales').textContent = report.totalSales.toFixed(2) + " دينار";
+        function isFileProtocol() {
+            return window.location.protocol === 'file:';
         }
-    } catch (err) {
-        console.error("تعذر جلب التقارير اللحظية:", err);
-    }
-}
+
+        function safeParseJson(text) {
+            if (!text) return null;
+            try {
+                return JSON.parse(text);
+            } catch (err) {
+                return null;
+            }
+        }
+
+        // ==========================================
+        // أ) دالة الـ POST - إرسال البيانات فور الحفظ
+        // ==========================================
+        async function sendToCloud(payload) {
+            if (isFileProtocol()) {
+                console.warn("تم تخطي الربط السحابي لأن الصفحة مفتوحة من ملف محلي. افتحها من خادم أو localhost حتى يعمل الربط.");
+                return false;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('jsonData', JSON.stringify(payload));
+
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    cache: 'no-cache',
+                    headers: { 'Accept': 'application/json' },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const text = await response.text();
+                safeParseJson(text);
+                console.log("تم التحديث الفوري سحابياً!");
+                return true;
+            } catch (err) {
+                console.error("خطأ في الربط السحابي:", err);
+                return false;
+            }
+        }
+
+        // ==========================================
+        // ب) دالة الـ GET - جلب التقارير المالية فوراً
+        // ==========================================
+        async function fetchCloudReports() {
+            if (isFileProtocol()) {
+                console.warn("تم تخطي جلب التقارير السحابية لأن الصفحة مفتوحة من ملف محلي.");
+                return;
+            }
+
+            try {
+                console.log("جاري سحب أحدث التقارير المالية (GET)...");
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const text = await response.text();
+                const report = safeParseJson(text);
+                console.log("تم استقبال التقرير اللحظي:", report || text);
+
+                if (report && document.getElementById('daily-total-sales')) {
+                    document.getElementById('daily-total-sales').textContent = (report.totalSales || 0).toFixed(2) + " دينار";
+                }
+            } catch (err) {
+                console.error("تعذر جلب التقارير اللحظية:", err);
+            }
+        }
         // كلمة المرور لحذف العملاء والفواتير
         const DELETE_PASSWORD = "12345678";
         document.querySelectorAll('.tab').forEach(tab => {
