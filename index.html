@@ -2134,36 +2134,73 @@
 
     <script>
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxSZ2qOw8cup1AJmlFCn2Ms1vik7G7Xw3kEPRW682HjFOC_RDckcr00bAefoBMwGedxPg/exec";
+        
         function sendDataToGoogleSheets(actionType, dataPayload, clientName = "") {
-    showNotification('جاري مزامنة البيانات سحابياً...', 'info');
-    
-    fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        cache: 'no-cache',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            action: actionType,
-            data: dataPayload,
-            clientName: clientName
-        })
-    })
-    .then(() => {
-        showNotification('تم الحفظ محلياً والمزامنة السحابية بنجاح!');
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showNotification('تم الحفظ محلياً، فشلت المزامنة السحابية مؤقتاً', 'error');
-    });
-}
+            showNotification('جاري مزامنة البيانات سحابياً...', 'info');
+            
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                cache: 'no-cache',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: actionType,
+                    data: dataPayload,
+                    clientName: clientName
+                })
+            })
+            .then(() => {
+                showNotification('تم الحفظ محلياً والمزامنة السحابية بنجاح!');
+                // إعادة جلب البيانات فوراً بعد الحفظ لتحديث الأجهزة الأخرى
+                fetchClientsFromGoogleSheets();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showNotification('تم الحفظ محلياً، فشلت المزامنة السحابية مؤقتاً', 'error');
+            });
+        }
+
         // كلمة المرور لحذف العملاء والفواتير
         const DELETE_PASSWORD = "12345678";
         
         // متغيرات النظام
         let productCount = 0;
-        let clients = JSON.parse(localStorage.getItem('clients')) || [];
+        let clients = [];
+
+        // دالة لجلب البيانات من جوجل شيتس وتحديث النظام على كافة الأجهزة
+        function fetchClientsFromGoogleSheets() {
+            showNotification('جاري تحميل بيانات العملاء من السحابة...', 'info');
+            
+            fetch(GOOGLE_SCRIPT_URL)
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    clients = data;
+                    // حفظ نسخة احتياطية محلياً في ذاكرة المتصفح
+                    localStorage.setItem('factory_clients', JSON.stringify(clients));
+                    // تحديث واجهات النظام (اللوحة وقائمة العملاء الفردية)
+                    if (typeof updateDashboard === "function") updateDashboard();
+                    loadClientsList(); // تصحيح الاستدعاء ليتوافق مع اسم دالتك الأصلية
+                    showNotification('تم تحديث البيانات سحابياً بنجاح!');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching data:', error);
+                // في حال عدم وجود إنترنت، يتم الاعتماد على الذاكرة المحلية
+                clients = JSON.parse(localStorage.getItem('factory_clients')) || [];
+                if (typeof updateDashboard === "function") updateDashboard();
+                loadClientsList();
+                showNotification('تم تحميل البيانات المحلية (أوفلاين)', 'error');
+            });
+        }
+
+        // استدعاء الدالة فور تشغيل الصفحة ليتم التحديث تلقائياً بين الكمبيوتر والهاتف
+        window.addEventListener('DOMContentLoaded', (event) => {
+            fetchClientsFromGoogleSheets();
+        });
+
         let invoices = JSON.parse(localStorage.getItem('invoices')) || [];
         let purchaseHistory = JSON.parse(localStorage.getItem('purchaseHistory')) || [];
         let employeeSalaries = JSON.parse(localStorage.getItem('employeeSalaries')) || [];
@@ -2690,12 +2727,17 @@
                 paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: totalDue - paidAmount, checkDetails };
             }
             
-            const selectedDate = document.getElementById('invoice-date-input').value;
+           const selectedDate = document.getElementById('invoice-date-input').value;
             const invoiceDate = selectedDate ? new Date(selectedDate + 'T12:00:00').toISOString() : new Date().toISOString();
             
             const invoice = {
                 id: generateInvoiceId(),
                 date: invoiceDate,
+                clientName: clientName, // مفتاح أساسي للربط السحابي
+                type: paymentData.type === 'multiple' ? 'متعدد' : getPaymentMethodText(paymentData.method),
+                total: grandTotal,
+                paid: paymentData.paidAmount,
+                remaining: paymentData.remainingBalance,
                 client: { name: clientName, address: clientAddress, phone: clientPhone },
                 products: productsData,
                 subtotal: parseFloat(document.getElementById('subtotal').textContent) || 0,
@@ -2715,12 +2757,13 @@
             
             updateClientBalance(clientName, paymentData.remainingBalance);
             
-            showNotification('تم حفظ الفاتورة بنجاح');
-            
+            showNotification('تم حفظ الفاتورة محلياً وجاري الرفع السحابي...');
             resetInvoiceForm();
-            
             loadReports();
             updateDashboard();
+            
+            // استدعاء المزامنة المتوافقة مع سرفر جوجل شيتس تَبَعك
+            sendDataToGoogleSheets("saveInvoice", invoice);
         }
         
         function generateInvoiceId() {
@@ -3031,14 +3074,13 @@
                 address,
                 phone,
                 balance: 0,
-                createdAt: new Date().toISOString(),
-                payments: []
+                createdAt: new Date().toISOString()
             };
             
             clients.push(client);
             localStorage.setItem('clients', JSON.stringify(clients));
             
-            showNotification('تم حفظ العميل بنجاح');
+            showNotification('تم حفظ العميل محلياً وجاري المزامنة...');
             
             document.getElementById('new-client-name').value = '';
             document.getElementById('new-client-address').value = '';
@@ -3046,6 +3088,8 @@
             
             loadClientsList();
             updateDashboard();
+            
+            // سطر المزامنة الفورية السحابية
             sendDataToGoogleSheets("saveClient", client);
         }
         function loadClientsList() {
@@ -4426,15 +4470,21 @@ function addPayment() {
         });
         
         // بدء التشغيل
+       // بدء التشغيل التلقائي والمزامنة الدورية بين الهاتف والكمبيوتر
         window.addEventListener('DOMContentLoaded', function() {
             setDefaultDates();
             addProductRow();
-            loadClientsList();
+            fetchClientsFromGoogleSheets(); // جلب سحابي فوري أول ما تفتح الصفحة
             loadInvoicesHistory();
             setupMultiplePayments();
             loadReports();
             setupCalculator();
             updateDashboard();
+            
+            // تحديث سحابي تلقائي كل 30 ثانية ليتطابق الهاتف والكمبيوتر فوراً
+            setInterval(function() {
+                fetchClientsFromGoogleSheets();
+            }, 30000); 
         });
     </script>
 </body>
