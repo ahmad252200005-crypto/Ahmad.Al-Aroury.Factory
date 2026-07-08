@@ -2133,6 +2133,31 @@
     </div>
 
     <script>
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxSZ2qOw8cup1AJmlFCn2Ms1vik7G7Xw3kEPRW682HjFOC_RDckcr00bAefoBMwGedxPg/exec";
+        function sendDataToGoogleSheets(actionType, dataPayload, clientName = "") {
+    showNotification('جاري مزامنة البيانات سحابياً...', 'info');
+    
+    fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        cache: 'no-cache',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            action: actionType,
+            data: dataPayload,
+            clientName: clientName
+        })
+    })
+    .then(() => {
+        showNotification('تم الحفظ محلياً والمزامنة السحابية بنجاح!');
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('تم الحفظ محلياً، فشلت المزامنة السحابية مؤقتاً', 'error');
+    });
+}
         // كلمة المرور لحذف العملاء والفواتير
         const DELETE_PASSWORD = "12345678";
         
@@ -3021,6 +3046,7 @@
             
             loadClientsList();
             updateDashboard();
+            sendDataToGoogleSheets("saveClient", client);
         }
         function loadClientsList() {
     const clientList = document.getElementById('client-list');
@@ -3277,6 +3303,7 @@ function addPayment() {
     // إخفاء نموذج الدفع وإعادة تعيين حقل المبلغ
     document.getElementById('payment-form').style.display = 'none';
     document.getElementById('payment-amount').value = '0.00';
+    sendDataToGoogleSheets("addPayment", payment, currentViewingClient);
 }
         
         function filterClients(searchTerm) {
@@ -3689,6 +3716,7 @@ function addPayment() {
             
             showNotification('تم حفظ كشف الراتب بنجاح');
             loadEmployeeSalaries();
+            sendDataToGoogleSheets("saveSalary", salaryRecord);
         }
         
         function loadEmployeeSalaries() {
