@@ -3192,7 +3192,10 @@ async function saveInvoice() {
             localStorage.setItem('clients', JSON.stringify(clients));
 
             try {
-                await sendToCloud({ action: 'saveClient', client: client });
+                const cloudResult = await sendToCloud({ action: 'saveClient', client: client });
+                if (cloudResult) {
+                    await fetchCloudData();
+                }
                 showNotification('تم حفظ العميل بنجاح');
             } catch (err) {
                 console.error('فشل إرسال العميل للسحابة:', err);
