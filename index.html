@@ -2184,11 +2184,56 @@
                     throw new Error(parsed.message || 'فشل الحفظ في السحابة');
                 }
 
+                if (parsed && parsed.data) {
+                    localStorage.setItem('clients', JSON.stringify(parsed.data.clients || []));
+                    localStorage.setItem('invoices', JSON.stringify(parsed.data.invoices || []));
+                    localStorage.setItem('purchaseHistory', JSON.stringify(parsed.data.purchaseHistory || []));
+                    localStorage.setItem('employeeSalaries', JSON.stringify(parsed.data.employeeSalaries || []));
+                }
+
                 console.log("تم التحديث الفوري سحابياً!");
                 return parsed || true;
             } catch (err) {
                 console.error("خطأ في الربط السحابي:", err);
                 return false;
+            }
+        }
+
+        async function fetchCloudData() {
+            if (isFileProtocol()) {
+                return;
+            }
+
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                const text = await response.text();
+                const parsed = safeParseJson(text);
+                if (parsed && parsed.data) {
+                    localStorage.setItem('clients', JSON.stringify(parsed.data.clients || []));
+                    localStorage.setItem('invoices', JSON.stringify(parsed.data.invoices || []));
+                    localStorage.setItem('purchaseHistory', JSON.stringify(parsed.data.purchaseHistory || []));
+                    localStorage.setItem('employeeSalaries', JSON.stringify(parsed.data.employeeSalaries || []));
+
+                    clients = parsed.data.clients || [];
+                    invoices = parsed.data.invoices || [];
+                    purchaseHistory = parsed.data.purchaseHistory || [];
+                    employeeSalaries = parsed.data.employeeSalaries || [];
+
+                    loadClientsList();
+                    loadInvoicesHistory();
+                    loadPurchaseHistory();
+                    loadEmployeeSalaries();
+                    loadProductSalesTotals();
+                    updateDashboard();
+                }
+            } catch (err) {
+                console.error('تعذر تحميل البيانات من السحابة:', err);
             }
         }
 
@@ -3721,8 +3766,8 @@ function addPayment() {
         function startAutoRefresh() {
             if (autoRefreshTimer) clearInterval(autoRefreshTimer);
             autoRefreshTimer = setInterval(() => {
-                refreshFromStorage();
-            }, 3000);
+                fetchCloudData();
+            }, 5000);
         }
         
         // ------------------- دوال كشوف العمال (موجزة) -------------------
