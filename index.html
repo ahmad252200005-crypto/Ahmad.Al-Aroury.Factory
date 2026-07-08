@@ -2166,7 +2166,8 @@ async function fetchCloudReports() {
         console.log("جاري سحب أحدث التقارير المالية (GET)...");
         const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'GET',
-            mode: 'cors'
+            mode: 'cors',
+            cache: 'no-cache' // قيد التعديل: تمنع حظر الحماية المتصفح
         });
         
         const report = await response.json();
@@ -2753,6 +2754,13 @@ async function fetchCloudReports() {
             
             loadReports();
             updateDashboard();
+            // قيد التعديل: أضف هذا السطر في نهاية دالة saveInvoice لتحديث جوجل شيتس فوراً
+           // تعديل: أضف كلمة async قبل الدالة
+async function saveInvoice() {
+    // ... كود الفاتورة الحالي ...
+    
+    await sendToCloud({ action: "saveInvoice", invoice: invoice });
+}
         }
         
         function generateInvoiceId() {
@@ -3075,7 +3083,13 @@ async function fetchCloudReports() {
             document.getElementById('new-client-name').value = '';
             document.getElementById('new-client-address').value = '';
             document.getElementById('new-client-phone').value = '';
-            
+            // قيد التعديل: أضف هذا السطر داخل دالة saveClient قبل تفريغ الحقول
+             // تعديل: أضف كلمة async قبل الدالة
+async function saveClient() {
+    // ... كود العميل الحالي ...
+    
+    await sendToCloud({ action: "saveClient", client: client });
+}
             loadClientsList();
             updateDashboard();
         }
@@ -3721,7 +3735,13 @@ function addPayment() {
             const overtime = parseFloat(document.getElementById('employee-overtime').value) || 0;
             const deductions = parseFloat(document.getElementById('employee-deductions').value) || 0;
             const netSalary = basicSalary + overtime - deductions;
-            
+            // قيد التعديل: أضف هذا السطر في نهاية دالة saveSalary
+           // تعديل: أضف كلمة async قبل الدالة
+async function saveSalary() {
+    // ... كود الرواتب الحالي ...
+    
+    await sendToCloud({ action: "saveSalary", salary: salaryRecord });
+}
             if (!employeeName) {
                 showNotification('يرجى إدخال اسم الموظف', 'error');
                 return;
