@@ -2344,6 +2344,7 @@
         let purchaseHistory = JSON.parse(localStorage.getItem('purchaseHistory')) || [];
         let employeeSalaries = JSON.parse(localStorage.getItem('employeeSalaries')) || [];
         let currentViewingClient = null;
+        let editingInvoiceId = null;
         
         // متغيرات التقسيم للتقارير
         let currentSalesPage = 1;
@@ -2872,7 +2873,7 @@
             const invoiceDate = selectedDate ? new Date(selectedDate + 'T12:00:00').toISOString() : new Date().toISOString();
             
             const invoice = {
-                id: generateInvoiceId(),
+                id: editingInvoiceId || generateInvoiceId(),
                 date: invoiceDate,
                 client: { name: clientName, address: clientAddress, phone: clientPhone },
                 products: productsData,
@@ -2883,6 +2884,12 @@
                 payment: paymentData,
                 status: paymentData.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة'
             };
+
+            if (editingInvoiceId) {
+                invoices = invoices.filter(inv => inv.id !== editingInvoiceId);
+                purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== editingInvoiceId);
+                localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+            }
             
             productsData.forEach(product => {
                 addToPurchaseHistory(product.productName, product.thickness, product.quantity, product.price, clientName, invoice.id);
@@ -2893,19 +2900,24 @@
             
             updateClientBalance(clientName, paymentData.remainingBalance);
             
-            showNotification('تم حفظ الفاتورة بنجاح');
-            
             try {
+                if (editingInvoiceId) {
+                    await sendToCloud({ action: 'deleteInvoice', invoiceId: editingInvoiceId });
+                }
                 await sendToCloud({ action: 'saveInvoice', invoice: invoice });
                 await fetchCloudData();
+                showNotification(editingInvoiceId ? 'تم تعديل الفاتورة بنجاح' : 'تم حفظ الفاتورة بنجاح');
             } catch (err) {
                 console.error('فشل إرسال الفاتورة للسحابة:', err);
+                showNotification('تم حفظ الفاتورة محليًا لكن لم يتم إرسالها للسحابة', 'error');
             }
             
+            editingInvoiceId = null;
             resetInvoiceForm();
             
             loadReports();
             updateDashboard();
+            loadInvoicesHistory();
         }
         
         function generateInvoiceId() {
@@ -3060,6 +3072,7 @@
             
             calculateTotals();
             updatePaymentBalance();
+            editingInvoiceId = invoiceId;
             
             showNotification('يمكنك الآن تعديل الفاتورة');
         }
@@ -3605,20 +3618,52 @@ function addPayment() {
                         <div>المبلغ المتبقي: ${invoice.payment.remainingBalance.toFixed(2)} دينار</div>
                         <div>الحالة: ${invoice.status}</div>
                     </div>
-                    <button class="btn btn-secondary edit-invoice" data-invoice-id="${invoice.id}">
-                        <i class="fas fa-edit"></i> تعديل الفاتورة
-                    </button>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                        <button class="btn btn-secondary edit-invoice" data-invoice-id="${invoice.id}">
+                            <i class="fas fa-edit"></i> تعديل الفاتورة
+                        </button>
+                        <button class="btn btn-danger delete-invoice" data-invoice-id="${invoice.id}">
+                            <i class="fas fa-trash"></i> حذف الفاتورة
+                        </button>
+                    </div>
                 `;
                 
                 invoiceDiv.querySelector('.edit-invoice').addEventListener('click', function() {
                     editInvoice(invoice.id);
                 });
+                invoiceDiv.querySelector('.delete-invoice').addEventListener('click', function() {
+                    deleteInvoice(invoice.id);
+                });
                 
                 invoicesHistory.appendChild(invoiceDiv);
             });
         }
-        
-        // ------------------- دوال سجل المشتريات -------------------
+
+        async function deleteInvoice(invoiceId) {
+            const password = prompt('يرجى إدخال كلمة المرور لحذف الفاتورة:');
+            if (password !== DELETE_PASSWORD) {
+                showNotification('كلمة المرور غير صحيحة', 'error');
+                return;
+            }
+
+            invoices = invoices.filter(inv => inv.id !== invoiceId);
+            localStorage.setItem('invoices', JSON.stringify(invoices));
+            purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== invoiceId);
+            localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+
+            try {
+                await sendToCloud({ action: 'deleteInvoice', invoiceId: invoiceId });
+                await fetchCloudData();
+                showNotification('تم حذف الفاتورة بنجاح');
+            } catch (err) {
+                console.error('فشل حذف الفاتورة من السحابة:', err);
+                showNotification('تم حذف الفاتورة محليًا لكن لم يتم حذفها من السحابة', 'error');
+            }
+
+            loadInvoicesHistory();
+            updateDashboard();
+        }
+
         function searchPurchaseHistory() {
             const searchTerm = document.getElementById('purchase-client-search').value;
             
