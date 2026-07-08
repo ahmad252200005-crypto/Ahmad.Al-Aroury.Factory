@@ -3678,6 +3678,9 @@ function addPayment() {
                         <div>الحالة: ${invoice.status}</div>
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                        <button class="btn btn-success print-invoice-history" data-invoice-id="${invoice.id}">
+                            <i class="fas fa-print"></i> طباعة
+                        </button>
                         <button class="btn btn-secondary edit-invoice" data-invoice-id="${invoice.id}">
                             <i class="fas fa-edit"></i> تعديل الفاتورة
                         </button>
@@ -3687,6 +3690,9 @@ function addPayment() {
                     </div>
                 `;
                 
+                invoiceDiv.querySelector('.print-invoice-history').addEventListener('click', function() {
+                    printInvoiceRecord(invoice);
+                });
                 invoiceDiv.querySelector('.edit-invoice').addEventListener('click', function() {
                     editInvoice(invoice.id);
                 });
@@ -3696,6 +3702,173 @@ function addPayment() {
                 
                 invoicesHistory.appendChild(invoiceDiv);
             });
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function openProfessionalPrintWindow(title, bodyHtml) {
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                showNotification('لم يتم فتح نافذة الطباعة', 'error');
+                return null;
+            }
+
+            printWindow.document.write(`
+                <html dir="rtl">
+                <head>
+                    <title>${escapeHtml(title)}</title>
+                    <style>
+                        @page { size: A4; margin: 8mm; }
+                        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; margin: 0; padding: 0; color: #233342; background: #fff; }
+                        .print-page { width: 100%; max-width: 190mm; margin: 0 auto; padding: 8mm; box-sizing: border-box; }
+                        .header { text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; margin-bottom: 12px; }
+                        .header h1 { margin: 0; font-size: 20px; color: #2c3e50; }
+                        .header h2 { margin: 4px 0 0; font-size: 13px; color: #5d6d7e; }
+                        .sub-title { margin-top: 6px; font-size: 12px; color: #7f8c8d; }
+                        .card { border: 1px solid #d7e1ea; border-radius: 10px; padding: 10px 12px; margin: 10px 0; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04); page-break-inside: avoid; break-inside: avoid; }
+                        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+                        .row { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10pt; page-break-inside: auto; }
+                        th, td { border: 1px solid #d7e1ea; padding: 6px; text-align: center; page-break-inside: avoid; break-inside: avoid; }
+                        th { background: #f5f7fa; color: #2c3e50; }
+                        .total-row { font-weight: bold; background: #f9fbfd; }
+                        .signature { display: flex; justify-content: space-between; gap: 20px; margin-top: 16px; color: #5d6d7e; font-size: 10pt; page-break-inside: avoid; break-inside: avoid; }
+                        .footer { margin-top: 12px; font-size: 9pt; color: #7f8c8d; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
+                        @media print { body { background: #fff; } .print-page { padding: 0; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="print-page">${bodyHtml}</div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.focus();
+            printWindow.print();
+            return printWindow;
+        }
+
+        function buildInvoicePrintBody(invoice) {
+            const productsRows = (invoice.products || []).map(product => {
+                const thicknessText = product.thickness ? ` (${product.thickness} مم)` : '';
+                return `
+                    <tr>
+                        <td>${escapeHtml(product.productName || '')}${escapeHtml(thicknessText)}</td>
+                        <td>${(product.quantity || 0).toFixed(2)}</td>
+                        <td>${(product.price || 0).toFixed(2)}</td>
+                        <td>${(product.total || 0).toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            let paymentContent = '';
+            if (invoice.payment?.type === 'multiple') {
+                paymentContent = (invoice.payment.payments || []).map(p => `
+                    <div class="row"><span>${escapeHtml(getPaymentMethodText(p.method))}</span><span>${(p.amount || 0).toFixed(2)} دينار</span></div>
+                `).join('');
+            } else {
+                paymentContent = `
+                    <div class="row"><span>طريقة الدفع</span><span>${escapeHtml(getPaymentMethodText(invoice.payment?.method || ''))}</span></div>
+                    <div class="row"><span>المبلغ المدفوع</span><span>${(invoice.payment?.paidAmount || 0).toFixed(2)} دينار</span></div>
+                `;
+            }
+
+            return `
+                <div class="header">
+                    <h1>مصنع أحمد العاروري</h1>
+                    <h2>لصناعة أكسسوارات الديكور</h2>
+                    <div class="sub-title">فاتورة بيع</div>
+                </div>
+                <div class="card">
+                    <div class="info-grid">
+                        <div>
+                            <div class="row"><strong>رقم الفاتورة</strong><span>${escapeHtml(invoice.id || 'فاتورة جديدة')}</span></div>
+                            <div class="row"><strong>التاريخ</strong><span>${escapeHtml(new Date(invoice.date).toLocaleDateString('ar-EG'))}</span></div>
+                        </div>
+                        <div>
+                            <div class="row"><strong>العميل</strong><span>${escapeHtml(invoice.client?.name || '')}</span></div>
+                            <div class="row"><strong>العنوان</strong><span>${escapeHtml(invoice.client?.address || '')}</span></div>
+                            <div class="row"><strong>الهاتف</strong><span>${escapeHtml(invoice.client?.phone || '')}</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>المنتج</th>
+                                <th>الكمية</th>
+                                <th>السعر</th>
+                                <th>المجموع</th>
+                            </tr>
+                        </thead>
+                        <tbody>${productsRows}</tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <div class="row"><span>المجموع الفرعي</span><span>${(invoice.subtotal || 0).toFixed(2)} دينار</span></div>
+                    <div class="row"><span>الخصم</span><span>${(invoice.totalDiscount || 0).toFixed(2)} دينار</span></div>
+                    <div class="row"><span>الضريبة</span><span>${(invoice.totalTax || 0).toFixed(2)} دينار</span></div>
+                    <div class="row total-row"><span>المجموع الكلي</span><span>${(invoice.grandTotal || 0).toFixed(2)} دينار</span></div>
+                    ${paymentContent}
+                    <div class="row"><span>المبلغ المتبقي</span><span>${(invoice.payment?.remainingBalance || 0).toFixed(2)} دينار</span></div>
+                    <div class="row"><span>الحالة</span><span>${escapeHtml(invoice.status || '')}</span></div>
+                </div>
+                <div class="signature">
+                    <div>توقيع العميل</div>
+                    <div>توقيع المدير</div>
+                </div>
+                <div class="footer">تمت الطباعة من نظام إدارة المصنع</div>
+            `;
+        }
+
+        function printInvoiceRecord(invoice) {
+            const bodyHtml = buildInvoicePrintBody(invoice);
+            openProfessionalPrintWindow(`فاتورة ${invoice.id}`, bodyHtml);
+        }
+
+        function printCurrentInvoiceFromForm() {
+            const invoice = {
+                id: `فاتورة-${new Date().toLocaleDateString('en-GB').replace(/\//g, '')}`,
+                date: new Date().toISOString(),
+                client: {
+                    name: document.getElementById('client-name').value || '',
+                    address: document.getElementById('client-address').value || '',
+                    phone: document.getElementById('client-phone').value || ''
+                },
+                products: Array.from(document.querySelectorAll('#products-body tr')).map(row => ({
+                    productName: row.querySelector('.product-name')?.value || '',
+                    thickness: row.querySelector('.thickness')?.value || 0,
+                    quantity: parseFloat(row.querySelector('.quantity')?.value) || 0,
+                    price: parseFloat(row.querySelector('.price')?.value) || 0,
+                    total: parseFloat(row.querySelector('.total')?.textContent) || 0
+                })).filter(item => item.productName),
+                subtotal: parseFloat(document.getElementById('subtotal').textContent) || 0,
+                totalDiscount: parseFloat(document.getElementById('total-discount').textContent) || 0,
+                totalTax: parseFloat(document.getElementById('total-tax').textContent) || 0,
+                grandTotal: parseFloat(document.getElementById('grand-total').textContent) || 0,
+                payment: {
+                    type: document.getElementById('enable-multiple-payments').checked ? 'multiple' : 'single',
+                    method: document.querySelector('input[name="payment-method"]:checked')?.value || '',
+                    paidAmount: parseFloat(document.getElementById('paid-amount').value) || 0,
+                    remainingBalance: parseFloat(document.getElementById('balance-amount').textContent) || 0,
+                    payments: Array.from(document.querySelectorAll('.payment-row')).map(row => ({
+                        method: row.querySelector('.payment-method-select')?.value || 'cash',
+                        amount: parseFloat(row.querySelector('.payment-amount')?.value) || 0
+                    }))
+                },
+                status: parseFloat(document.getElementById('balance-amount').textContent) > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة'
+            };
+
+            const bodyHtml = buildInvoicePrintBody(invoice);
+            openProfessionalPrintWindow('فاتورة مبدئية', bodyHtml);
         }
 
         async function deleteInvoice(invoiceId) {
@@ -3948,91 +4121,78 @@ function addPayment() {
             document.getElementById('salary-result').style.display = 'block';
         }
         
+        function buildSalaryPrintBody(salary) {
+            const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+            const month = salary.month || '1';
+            const monthLabel = monthNames[parseInt(month, 10) - 1] || month;
+            const basicSalary = Number(salary.basicSalary ?? 0);
+            const overtime = Number(salary.overtime ?? 0);
+            const deductions = Number(salary.deductions ?? 0);
+            const netSalary = Number(salary.netSalary ?? (basicSalary + overtime - deductions));
+
+            return `
+                <div class="header">
+                    <h1>مصنع أحمد العاروري</h1>
+                    <h2>لصناعة أكسسوارات الديكور</h2>
+                    <div class="sub-title">كشف راتب الموظف</div>
+                </div>
+                <div class="card">
+                    <div class="info-grid">
+                        <div>
+                            <div class="row"><strong>اسم الموظف</strong><span>${escapeHtml(salary.employeeName || 'غير محدد')}</span></div>
+                            <div class="row"><strong>رقم الهوية</strong><span>${escapeHtml(salary.employeeId || 'غير محدد')}</span></div>
+                        </div>
+                        <div>
+                            <div class="row"><strong>المسمى الوظيفي</strong><span>${escapeHtml(salary.employeePosition || 'غير محدد')}</span></div>
+                            <div class="row"><strong>الشهر</strong><span>${escapeHtml(`${monthLabel} ${salary.year || new Date().getFullYear()}`)}</span></div>
+                            <div class="row"><strong>تاريخ الطباعة</strong><span>${escapeHtml(new Date().toLocaleDateString('ar-EG'))}</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <table>
+                        <thead>
+                            <tr><th>البند</th><th>المبلغ (دينار)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>الراتب الأساسي</td><td>${basicSalary.toFixed(2)}</td></tr>
+                            <tr><td>الإضافي</td><td>${overtime.toFixed(2)}</td></tr>
+                            <tr><td>الخصومات</td><td>${deductions.toFixed(2)}</td></tr>
+                            <tr class="total-row"><td><strong>صافي الراتب</strong></td><td><strong>${netSalary.toFixed(2)}</strong></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="signature">
+                    <div>توقيع الموظف</div>
+                    <div>توقيع المدير</div>
+                </div>
+                <div class="footer">تمت الطباعة من نظام إدارة المصنع</div>
+            `;
+        }
+
         function printSalary() {
-            document.getElementById('invoice-date').textContent = new Date().toLocaleDateString('en-US');
-            document.getElementById('hijri-date').textContent = getHijriDate();
-            
-            const printWindow = window.open('', '_blank');
             const employeeName = document.getElementById('employee-name').value || 'غير محدد';
             const employeeId = document.getElementById('employee-id').value || 'غير محدد';
             const employeePosition = document.getElementById('employee-position').value || 'غير محدد';
-            const month = document.getElementById('employee-month').options[document.getElementById('employee-month').selectedIndex].text;
-            const year = document.getElementById('employee-year').value;
-            
-            printWindow.document.write(`
-                <html dir="rtl">
-                <head>
-                    <title>كشف راتب - ${employeeName}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; direction: rtl; }
-                        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px double #000; padding: 20px; }
-                        .header h1 { margin: 0; font-size: 32px; color: #2c3e50; }
-                        .header h2 { margin: 10px 0; font-size: 24px; color: #34495e; }
-                        .english-title { font-size: 20px; color: #7f8c8d; }
-                        .employee-info { margin: 20px 0; padding: 15px; border: 2px solid #000; }
-                        .salary-details { margin: 20px 0; }
-                        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-                        th, td { border: 1px solid #000; padding: 10px; text-align: center; }
-                        th { background-color: #f0f0f0; font-weight: bold; }
-                        .total { font-weight: bold; font-size: 18px; border-top: 2px solid #000; padding-top: 15px; }
-                        @media print { body { margin: 0; } }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h1>مصنع أحمد العاروري</h1>
-                        <h2>لصناعة أكسسوارات الديكور</h2>
-                        <div class="english-title">FACTORY FOR DECORATION ACCESSORIES</div>
-                    </div>
-                    
-                    <div class="employee-info">
-                        <h3>كشف راتب الموظف</h3>
-                        <p><strong>اسم الموظف:</strong> ${employeeName}</p>
-                        <p><strong>رقم الهوية:</strong> ${employeeId}</p>
-                        <p><strong>المسمى الوظيفي:</strong> ${employeePosition}</p>
-                        <p><strong>شهر:</strong> ${month} ${year}</p>
-                        <p><strong>تاريخ الطباعة:</strong> ${new Date().toLocaleDateString('ar-EG')}</p>
-                    </div>
-                    
-                    <div class="salary-details">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>البند</th>
-                                    <th>المبلغ (دينار)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>الراتب الأساسي</td>
-                                    <td>${document.getElementById('basic-salary').textContent}</td>
-                                </tr>
-                                <tr>
-                                    <td>الإضافي</td>
-                                    <td>${document.getElementById('overtime-amount').textContent}</td>
-                                </tr>
-                                <tr>
-                                    <td>الخصومات</td>
-                                    <td>${document.getElementById('deductions-amount').textContent}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>صافي الراتب</strong></td>
-                                    <td><strong>${document.getElementById('net-salary').textContent}</strong></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <div style="margin-top: 50px;">
-                        <p>توقيع الموظف: _________________________</p>
-                        <p>توقيع المدير: _________________________</p>
-                    </div>
-                </body>
-                </html>
-            `);
-            
-            printWindow.document.close();
-            printWindow.print();
+            const month = document.getElementById('employee-month').value || '1';
+            const year = document.getElementById('employee-year').value || new Date().getFullYear();
+            const basicSalary = parseFloat(document.getElementById('employee-salary').value) || 0;
+            const overtime = parseFloat(document.getElementById('employee-overtime').value) || 0;
+            const deductions = parseFloat(document.getElementById('employee-deductions').value) || 0;
+            const netSalary = basicSalary + overtime - deductions;
+            const salary = {
+                employeeName,
+                employeeId,
+                employeePosition,
+                month,
+                year,
+                basicSalary,
+                overtime,
+                deductions,
+                netSalary
+            };
+            const bodyHtml = buildSalaryPrintBody(salary);
+            openProfessionalPrintWindow(`كشف راتب - ${employeeName}`, bodyHtml);
         }
         
         async function saveSalary() {
@@ -4176,84 +4336,9 @@ function addPayment() {
         function printSalaryItem(salaryId) {
             const salary = employeeSalaries.find(s => s.id === salaryId);
             if (!salary) return;
-            
-            const printWindow = window.open('', '_blank');
-            const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-            
-            printWindow.document.write(`
-                <html dir="rtl">
-                <head>
-                    <title>كشف راتب - ${salary.employeeName}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; direction: rtl; }
-                        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px double #000; padding: 20px; }
-                        .header h1 { margin: 0; font-size: 32px; color: #2c3e50; }
-                        .header h2 { margin: 10px 0; font-size: 24px; color: #34495e; }
-                        .english-title { font-size: 20px; color: #7f8c8d; }
-                        .employee-info { margin: 20px 0; padding: 15px; border: 2px solid #000; }
-                        .salary-details { margin: 20px 0; }
-                        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-                        th, td { border: 1px solid #000; padding: 10px; text-align: center; }
-                        th { background-color: #f0f0f0; font-weight: bold; }
-                        .total { font-weight: bold; font-size: 18px; border-top: 2px solid #000; padding-top: 15px; }
-                        @media print { body { margin: 0; } }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h1>مصنع أحمد العاروري</h1>
-                        <h2>لصناعة أكسسوارات الديكور</h2>
-                        <div class="english-title">FACTORY FOR DECORATION ACCESSORIES</div>
-                    </div>
-                    
-                    <div class="employee-info">
-                        <h3>كشف راتب الموظف</h3>
-                        <p><strong>اسم الموظف:</strong> ${salary.employeeName}</p>
-                        <p><strong>رقم الهوية:</strong> ${salary.employeeId || 'غير محدد'}</p>
-                        <p><strong>المسمى الوظيفي:</strong> ${salary.employeePosition || 'غير محدد'}</p>
-                        <p><strong>شهر:</strong> ${monthNames[parseInt(salary.month) - 1]} ${salary.year}</p>
-                        <p><strong>تاريخ الطباعة:</strong> ${new Date().toLocaleDateString('ar-EG')}</p>
-                    </div>
-                    
-                    <div class="salary-details">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>البند</th>
-                                    <th>المبلغ (دينار)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>الراتب الأساسي</td>
-                                    <td>${salary.basicSalary.toFixed(2)}</td>
-                                </tr>
-                                <tr>
-                                    <td>الإضافي</td>
-                                    <td>${salary.overtime.toFixed(2)}</td>
-                                </tr>
-                                <tr>
-                                    <td>الخصومات</td>
-                                    <td>${salary.deductions.toFixed(2)}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>صافي الراتب</strong></td>
-                                    <td><strong>${salary.netSalary.toFixed(2)}</strong></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <div style="margin-top: 50px;">
-                        <p>توقيع الموظف: _________________________</p>
-                        <p>توقيع المدير: _________________________</p>
-                    </div>
-                </body>
-                </html>
-            `);
-            
-            printWindow.document.close();
-            printWindow.print();
+
+            const bodyHtml = buildSalaryPrintBody(salary);
+            openProfessionalPrintWindow(`كشف راتب - ${salary.employeeName}`, bodyHtml);
         }
         
         function deleteSalary(salaryId) {
@@ -4602,7 +4687,6 @@ function addPayment() {
         }
         
         function printReport(reportType) {
-            const printWindow = window.open('', '_blank');
             const reportTitle = getReportTitle(reportType);
             
             let reportContent = '';
@@ -4616,41 +4700,19 @@ function addPayment() {
                 reportContent = document.getElementById('annual-report').innerHTML;
             }
             
-            printWindow.document.write(`
-                <html dir="rtl">
-                <head>
-                    <title>${reportTitle}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; direction: rtl; }
-                        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px double #000; padding: 20px; }
-                        .header h1 { margin: 0; font-size: 32px; color: #2c3e50; }
-                        .header h2 { margin: 10px 0; font-size: 24px; color: #34495e; }
-                        .english-title { font-size: 20px; color: #7f8c8d; }
-                        .report-content { margin: 20px 0; }
-                        .summary-card { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border: 1px solid #ddd; }
-                        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-                        th, td { border: 1px solid #000; padding: 8px; text-align: center; }
-                        th { background-color: #f0f0f0; font-weight: bold; }
-                        @media print { body { margin: 0; } }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h1>مصنع أحمد العاروري</h1>
-                        <h2>لصناعة أكسسوارات الديكور</h2>
-                        <div class="english-title">FACTORY FOR DECORATION ACCESSORIES</div>
-                        <h3>${reportTitle}</h3>
-                        <p>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</p>
-                    </div>
-                    <div class="report-content">
-                        ${reportContent}
-                    </div>
-                </body>
-                </html>
-            `);
-            
-            printWindow.document.close();
-            printWindow.print();
+            const bodyHtml = `
+                <div class="header">
+                    <h1>مصنع أحمد العاروري</h1>
+                    <h2>لصناعة أكسسوارات الديكور</h2>
+                    <div class="sub-title">${escapeHtml(reportTitle)}</div>
+                    <div class="sub-title">تاريخ الطباعة: ${escapeHtml(new Date().toLocaleDateString('ar-EG'))}</div>
+                </div>
+                <div class="card">
+                    ${reportContent}
+                </div>
+                <div class="footer">تمت الطباعة من نظام إدارة المصنع</div>
+            `;
+            openProfessionalPrintWindow(reportTitle, bodyHtml);
         }
         
         function getReportTitle(reportType) {
@@ -4675,7 +4737,7 @@ function addPayment() {
             const now = new Date();
             const timeString = now.toLocaleTimeString('ar-EG');
             document.getElementById('print-time').textContent = `وقت الطباعة: ${timeString}`;
-            window.print();
+            printCurrentInvoiceFromForm();
         });
         document.getElementById('save-invoice').addEventListener('click', saveInvoice);
         document.getElementById('reset-invoice').addEventListener('click', function() {
