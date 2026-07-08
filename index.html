@@ -3088,10 +3088,10 @@ async function saveInvoice() {
             }
         }
         
-        function saveClient() {
-            const name = document.getElementById('new-client-name').value;
-            const address = document.getElementById('new-client-address').value;
-            const phone = document.getElementById('new-client-phone').value;
+        async function saveClient() {
+            const name = document.getElementById('new-client-name').value.trim();
+            const address = document.getElementById('new-client-address').value.trim();
+            const phone = document.getElementById('new-client-phone').value.trim();
             
             if (!name) {
                 showNotification('يرجى إدخال اسم العميل', 'error');
@@ -3115,22 +3115,22 @@ async function saveInvoice() {
             
             clients.push(client);
             localStorage.setItem('clients', JSON.stringify(clients));
-            
-            showNotification('تم حفظ العميل بنجاح');
+
+            try {
+                await sendToCloud({ action: 'saveClient', client: client });
+                showNotification('تم حفظ العميل بنجاح');
+            } catch (err) {
+                console.error('فشل إرسال العميل للسحابة:', err);
+                showNotification('تم حفظ العميل محليًا لكن لم يتم الإرسال للسحابة', 'error');
+            }
             
             document.getElementById('new-client-name').value = '';
             document.getElementById('new-client-address').value = '';
             document.getElementById('new-client-phone').value = '';
-            // قيد التعديل: أضف هذا السطر داخل دالة saveClient قبل تفريغ الحقول
-             // تعديل: أضف كلمة async قبل الدالة
-async function saveClient() {
-    // ... كود العميل الحالي ...
-    
-    await sendToCloud({ action: "saveClient", client: client });
-}
             loadClientsList();
             updateDashboard();
         }
+
         function loadClientsList() {
     const clientList = document.getElementById('client-list');
     clientList.innerHTML = '';
