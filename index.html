@@ -2139,19 +2139,22 @@ const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqt7MJG6HbLr
 // ==========================================
 // أ) دالة الـ POST - إرسال البيانات فور الحفظ
 // ==========================================
+// التعديل المباشر لمنع حظر الـ CSP
 async function sendToCloud(payload) {
     try {
         const formData = new FormData();
         formData.append('jsonData', JSON.stringify(payload));
 
+        // إرسال صريح ومباشر لا يخترق سياسات الـ CSP المحددة
         await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'cors',
+            cache: 'no-cache', // تمنع تعليق البيانات المتصفح
             body: formData
         });
-        console.log("تم الترحيل السحابي الفوري بنجاح (POST).");
+        console.log("تم التحديث الفوري سحابياً!");
     } catch (err) {
-        console.error("خطأ أثناء المزامنة اللحظية:", err);
+        console.error("خطأ حماية أو اتصال:", err);
     }
 }
 
