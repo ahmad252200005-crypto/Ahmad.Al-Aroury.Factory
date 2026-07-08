@@ -2134,7 +2134,12 @@
 
     <script>
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxSZ2qOw8cup1AJmlFCn2Ms1vik7G7Xw3kEPRW682HjFOC_RDckcr00bAefoBMwGedxPg/exec";
-        
+        // إضافة الدالة المفقودة لربط تحديث البيانات السحابية مع واجهة العرض لديك
+function renderClientsTable() {
+    if (typeof loadClientsList === "function") {
+        loadClientsList();
+    }
+}
         function sendDataToGoogleSheets(actionType, dataPayload, clientName = "") {
             showNotification('جاري مزامنة البيانات سحابياً...', 'info');
             
@@ -2171,30 +2176,35 @@
 
         // دالة لجلب البيانات من جوجل شيتس وتحديث النظام على كافة الأجهزة
         function fetchClientsFromGoogleSheets() {
-            showNotification('جاري تحميل بيانات العملاء من السحابة...', 'info');
-            
-            fetch(GOOGLE_SCRIPT_URL)
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.length > 0) {
-                    clients = data;
-                    // حفظ نسخة احتياطية محلياً في ذاكرة المتصفح
-                    localStorage.setItem('factory_clients', JSON.stringify(clients));
-                    // تحديث واجهات النظام (اللوحة وقائمة العملاء الفردية)
-                    if (typeof updateDashboard === "function") updateDashboard();
-                    loadClientsList(); // تصحيح الاستدعاء ليتوافق مع اسم دالتك الأصلية
-                    showNotification('تم تحديث البيانات سحابياً بنجاح!');
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching data:', error);
-                // في حال عدم وجود إنترنت، يتم الاعتماد على الذاكرة المحلية
-                clients = JSON.parse(localStorage.getItem('factory_clients')) || [];
-                if (typeof updateDashboard === "function") updateDashboard();
-                loadClientsList();
-                showNotification('تم تحميل البيانات المحلية (أوفلاين)', 'error');
-            });
+    showNotification('جاري تحميل بيانات العملاء من السحابة...', 'info');
+    
+    fetch(GOOGLE_SCRIPT_URL)
+    .then(response => {
+        if (!response.ok) throw new Error('شبكة الاتصال غير مستقرة');
+        return response.json();
+    })
+    .then(data => {
+        // تأكيد وجود بيانات حقيقية قادمة من جوجل شيتس قبل استبدال المصفوفة
+        if (data && Array.isArray(data) && data.length > 0) {
+            clients = data;
+            localStorage.setItem('factory_clients', JSON.stringify(clients));
+            if (typeof updateDashboard === "function") updateDashboard();
+            loadClientsList();
+            showNotification('تم تحديث البيانات سحابياً بنجاح!');
+        } else {
+            // إذا كان جدول جوجل شيتس فارغاً، نعتمد على البيانات المحلية ولا نترك المصفوفة فارغة
+            clients = JSON.parse(localStorage.getItem('clients')) || [];
+            loadClientsList();
         }
+    })
+    .catch(error => {
+        console.error('Error fetching data:', error);
+        clients = JSON.parse(localStorage.getItem('clients')) || [];
+        if (typeof updateDashboard === "function") updateDashboard();
+        loadClientsList();
+        showNotification('تعذر الاتصال، تم تحميل البيانات المحلية', 'error');
+    });
+}
 
         // استدعاء الدالة فور تشغيل الصفحة ليتم التحديث تلقائياً بين الكمبيوتر والهاتف
         window.addEventListener('DOMContentLoaded', (event) => {
