@@ -2793,7 +2793,7 @@
         }
         
         // ------------------- دوال حفظ واسترجاع الفواتير -------------------
-        function saveInvoice() {
+        async function saveInvoice() {
             const clientName = document.getElementById('client-name').value;
             const clientAddress = document.getElementById('client-address').value;
             const clientPhone = document.getElementById('client-phone').value;
@@ -2895,17 +2895,17 @@
             
             showNotification('تم حفظ الفاتورة بنجاح');
             
+            try {
+                await sendToCloud({ action: 'saveInvoice', invoice: invoice });
+                await fetchCloudData();
+            } catch (err) {
+                console.error('فشل إرسال الفاتورة للسحابة:', err);
+            }
+            
             resetInvoiceForm();
             
             loadReports();
             updateDashboard();
-            // قيد التعديل: أضف هذا السطر في نهاية دالة saveInvoice لتحديث جوجل شيتس فوراً
-           // تعديل: أضف كلمة async قبل الدالة
-async function saveInvoice() {
-    // ... كود الفاتورة الحالي ...
-    
-    await sendToCloud({ action: "saveInvoice", invoice: invoice });
-}
         }
         
         function generateInvoiceId() {
@@ -2956,7 +2956,6 @@ async function saveInvoice() {
                 calculateRowTotal(lastRow);
             });
             
-            // استعادة بيانات الدفع
             if (invoice.payment.type === 'multiple') {
                 document.getElementById('enable-multiple-payments').checked = true;
                 document.getElementById('multiple-payments-section').style.display = 'block';
@@ -2995,7 +2994,6 @@ async function saveInvoice() {
                     `;
                     document.getElementById('multiple-payments-section').appendChild(paymentRow);
                     
-                    // إعادة ربط الأحداث
                     const methodSelect = paymentRow.querySelector('.payment-method-select');
                     const checkFields = paymentRow.querySelector('.check-fields-multiple');
                     const amountInput = paymentRow.querySelector('.payment-amount');
@@ -3062,9 +3060,6 @@ async function saveInvoice() {
             
             calculateTotals();
             updatePaymentBalance();
-            
-            invoices.splice(invoiceIndex, 1);
-            localStorage.setItem('invoices', JSON.stringify(invoices));
             
             showNotification('يمكنك الآن تعديل الفاتورة');
         }
@@ -3288,38 +3283,48 @@ async function saveInvoice() {
         clientList.appendChild(item);
     });
 }
-        function deleteSingleClient(clientName) {
-    // طلب كلمة المرور
+        async function deleteSingleClient(clientName) {
     const password = prompt('يرجى إدخال كلمة المرور لحذف العميل وجميع فواتيره ودفعاته:');
     if (password !== DELETE_PASSWORD) {
         showNotification('كلمة المرور غير صحيحة', 'error');
         return;
     }
-    
-    // حذف العميل من مصفوفة clients
+
     clients = clients.filter(client => client.name !== clientName);
     localStorage.setItem('clients', JSON.stringify(clients));
-    
-    // حذف جميع الفواتير المرتبطة بهذا العميل
-    invoices = invoices.filter(invoice => invoice.client.name !== clientName);
+
+    invoices = invoices.filter(invoice => invoice.client && invoice.client.name !== clientName);
     localStorage.setItem('invoices', JSON.stringify(invoices));
-    
-    // حذف جميع سجل المشتريات المرتبطة بهذا العميل
+
     purchaseHistory = purchaseHistory.filter(purchase => purchase.clientName !== clientName);
     localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
-    
-    // تحديث العرض
+
     loadClientsList();
-    loadInvoicesHistory(); // تحديث سجل الفواتير
-    loadPurchaseHistory(); // تحديث سجل المشتريات
-    
-    // إخفاء قسم فواتير العميل إذا كان معروضاً لهذا العميل
+    loadInvoicesHistory();
+    loadPurchaseHistory();
+
     if (currentViewingClient === clientName) {
         document.getElementById('client-invoices-section').style.display = 'none';
         currentViewingClient = null;
     }
-    
-    showNotification(`تم حذف العميل ${clientName} وجميع فواتيره ودفعاته بنجاح`);
+
+    const clientToDelete = clients.find(client => client.name === clientName);
+
+    try {
+        const cloudResult = await sendToCloud({
+            action: 'deleteClient',
+            clientName: clientName,
+            clientId: clientToDelete ? clientToDelete.id : ''
+        });
+        if (cloudResult) {
+            await fetchCloudData();
+        }
+        showNotification(`تم حذف العميل ${clientName} وجميع فواتيره ودفعاته بنجاح`);
+    } catch (err) {
+        console.error('فشل حذف العميل من السحابة:', err);
+        showNotification('تم الحذف محليًا لكن لم يتم حذف السجل من السحابة', 'error');
+    }
+
     updateDashboard();
 }
         function viewClientInvoices(clientName) {
@@ -4517,15 +4522,24 @@ async function saveSalary() {
             document.getElementById('deleteModal').style.display = 'flex';
             document.getElementById('passwordInput').value = '';
         });
-        document.getElementById('confirmDelete').addEventListener('click', function() {
+        document.getElementById('confirmDelete').addEventListener('click', async function() {
             const password = document.getElementById('passwordInput').value;
             if (password === DELETE_PASSWORD) {
                 clients = [];
                 localStorage.setItem('clients', JSON.stringify(clients));
-                showNotification('تم مسح جميع العملاء بنجاح');
                 loadClientsList();
                 document.getElementById('deleteModal').style.display = 'none';
                 document.getElementById('passwordInput').value = '';
+                try {
+                    const cloudResult = await sendToCloud({ action: 'clearAllClients' });
+                    if (cloudResult) {
+                        await fetchCloudData();
+                    }
+                    showNotification('تم مسح جميع العملاء بنجاح');
+                } catch (err) {
+                    console.error('فشل مسح العملاء من السحابة:', err);
+                    showNotification('تم مسح العملاء محليًا لكن لم يتم حذفهم من السحابة', 'error');
+                }
                 updateDashboard();
             } else {
                 showNotification('كلمة المرور غير صحيحة', 'error');
@@ -4535,30 +4549,48 @@ async function saveSalary() {
             document.getElementById('deleteModal').style.display = 'none';
             document.getElementById('passwordInput').value = '';
         });
-        document.getElementById('clear-all-invoices').addEventListener('click', function() {
+        document.getElementById('clear-all-invoices').addEventListener('click', async function() {
             if(confirm('هل أنت متأكد من مسح جميع الفواتير؟ هذا الإجراء لا يمكن التراجع عنه.')) {
                 const password = prompt('يرجى إدخال كلمة المرور للمتابعة:');
                 if (password === DELETE_PASSWORD) {
                     invoices = [];
                     localStorage.setItem('invoices', JSON.stringify(invoices));
-                    showNotification('تم مسح جميع الفواتير بنجاح');
                     loadInvoicesHistory();
+                    try {
+                        const cloudResult = await sendToCloud({ action: 'clearAllInvoices' });
+                        if (cloudResult) {
+                            await fetchCloudData();
+                        }
+                        showNotification('تم مسح جميع الفواتير بنجاح');
+                    } catch (err) {
+                        console.error('فشل مسح الفواتير من السحابة:', err);
+                        showNotification('تم مسح الفواتير محليًا لكن لم يتم حذفها من السحابة', 'error');
+                    }
                     updateDashboard();
                 } else {
                     showNotification('كلمة المرور غير صحيحة', 'error');
                 }
             }
         });
-        document.getElementById('clear-all-purchases').addEventListener('click', function() {
+        document.getElementById('clear-all-purchases').addEventListener('click', async function() {
             if(confirm('هل أنت متأكد من مسح جميع سجل المشتريات؟ هذا الإجراء لا يمكن التراجع عنه.')) {
                 const password = prompt('يرجى إدخال كلمة المرور للمتابعة:');
                 if (password === DELETE_PASSWORD) {
                     purchaseHistory = [];
                     localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
-                    showNotification('تم مسح جميع المشتريات بنجاح');
                     loadPurchaseHistory();
                     loadSteelThicknessPurchases();
                     loadProductSalesTotals();
+                    try {
+                        const cloudResult = await sendToCloud({ action: 'clearAllPurchases' });
+                        if (cloudResult) {
+                            await fetchCloudData();
+                        }
+                        showNotification('تم مسح جميع المشتريات بنجاح');
+                    } catch (err) {
+                        console.error('فشل مسح المشتريات من السحابة:', err);
+                        showNotification('تم مسح المشتريات محليًا لكن لم يتم حذفها من السحابة', 'error');
+                    }
                     updateDashboard();
                 } else {
                     showNotification('كلمة المرور غير صحيحة', 'error');
