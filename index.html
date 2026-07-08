@@ -2345,6 +2345,7 @@
         let employeeSalaries = JSON.parse(localStorage.getItem('employeeSalaries')) || [];
         let currentViewingClient = null;
         let editingInvoiceId = null;
+        let editingInvoiceSnapshot = null;
         let editingClientName = null;
         let editingSalaryId = null;
         
@@ -2915,6 +2916,7 @@
             }
             
             editingInvoiceId = null;
+            editingInvoiceSnapshot = null;
             resetInvoiceForm();
             
             loadReports();
@@ -2939,8 +2941,7 @@
             }
             
             const invoice = invoices[invoiceIndex];
-            
-            deletePurchaseHistoryByInvoiceId(invoiceId);
+            editingInvoiceSnapshot = JSON.parse(JSON.stringify(invoice));
             
             document.querySelector('.tab[data-tab="invoice"]').click();
             
@@ -3076,7 +3077,7 @@
             updatePaymentBalance();
             editingInvoiceId = invoiceId;
             
-            showNotification('يمكنك الآن تعديل الفاتورة');
+            showNotification('تم تحميل القيم الأصلية للفاتورة بنجاح');
         }
         
         function resetInvoiceForm() {
