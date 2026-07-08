@@ -2172,19 +2172,47 @@
                     body: formData
                 });
 
+                const text = await response.text();
+                const parsed = safeParseJson(text);
+                console.log("استجابة الربط السحابي:", response.status, parsed || text);
+
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                    throw new Error(`HTTP ${response.status}: ${parsed?.message || text || 'فشل الطلب'}`);
                 }
 
-                const text = await response.text();
-                safeParseJson(text);
+                if (parsed && parsed.success === false) {
+                    throw new Error(parsed.message || 'فشل الحفظ في السحابة');
+                }
+
                 console.log("تم التحديث الفوري سحابياً!");
-                return true;
+                return parsed || true;
             } catch (err) {
                 console.error("خطأ في الربط السحابي:", err);
                 return false;
             }
         }
+
+        window.testCloudConnection = async function() {
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache',
+                    headers: { 'Accept': 'application/json' }
+                });
+                const text = await response.text();
+                const parsed = safeParseJson(text);
+                console.log('اختبار الاتصال بالسحابة:', response.status, parsed || text);
+                if (response.ok) {
+                    showNotification('تم الاتصال بخدمة Google Apps Script بنجاح', 'success');
+                } else {
+                    showNotification('فشل الاتصال بالخدمة. راجع صلاحيات النشر أو الرابط', 'error');
+                }
+            } catch (err) {
+                console.error('فشل اختبار الاتصال:', err);
+                showNotification('تعذر الاتصال بخدمة Google Apps Script', 'error');
+            }
+        };
 
         // ==========================================
         // ب) دالة الـ GET - جلب التقارير المالية فوراً
