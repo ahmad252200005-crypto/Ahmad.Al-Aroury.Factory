@@ -2160,17 +2160,23 @@ const baseProducts = [
 // ==========================================
 // دالة الإرسال إلى Google Sheets (الترحيل السحابي)
 // ==========================================
+// ==========================================
+// دالة الإرسال المحدثة إلى Google Sheets 
+// ==========================================
 async function sendToCloud(payload) {
     if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("XXXXXXXXXXXX")) {
         console.log("رابط Google Sheets غير مهيأ بعد. سيتم الحفظ محلياً فقط.");
         return;
     }
     try {
+        // تحويل الطلب إلى صيغة FormData لتجنب مشاكل CORS نهائياً على الهواتف والكمبيوتر
+        const formData = new FormData();
+        formData.append('jsonData', JSON.stringify(payload));
+
         await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors', // لتفادي أخطاء CORS
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            mode: 'cors', 
+            body: formData
         });
         console.log("تم الترحيل إلى Google Sheets بنجاح.");
     } catch (err) {
