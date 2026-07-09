@@ -2871,7 +2871,7 @@
             localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
         }
         
-        function addToPurchaseHistory(productName, thickness, quantity, price, clientName, invoiceId) {
+        function addToPurchaseHistory(productName, thickness, quantity, price, total, clientName, invoiceId) {
             const purchase = {
                 id: Date.now().toString() + Math.random(),
                 date: new Date().toISOString(),
@@ -2879,7 +2879,7 @@
                 thickness: thickness || null,
                 quantity,
                 price,
-                total: quantity * price,
+                total: total,
                 clientName,
                 invoiceId: invoiceId
             };
@@ -2889,18 +2889,18 @@
         
         // ------------------- دوال حفظ واسترجاع الفواتير -------------------
         async function saveInvoice() {
-            const clientName = document.getElementById('client-name').value;
-            const clientAddress = document.getElementById('client-address').value;
-            const clientPhone = document.getElementById('client-phone').value;
-            
+            const clientName = document.getElementById('client-name').value.trim();
+            const clientAddress = document.getElementById('client-address').value.trim();
+            const clientPhone = document.getElementById('client-phone').value.trim();
+
             if (!clientName) {
                 showNotification('يرجى إدخال اسم العميل', 'error');
                 return;
             }
-            
+
             const productsData = [];
             const rows = document.querySelectorAll('#products-body tr');
-            
+
             rows.forEach(row => {
                 const productName = row.querySelector('.product-name').value;
                 const thickness = parseFloat(row.querySelector('.thickness').value) || null;
@@ -2908,29 +2908,22 @@
                 const price = parseFloat(row.querySelector('.price').value) || 0;
                 const discount = parseFloat(row.querySelector('.discount').value) || 0;
                 const total = parseFloat(row.querySelector('.total').textContent) || 0;
-                
+
                 if (productName && quantity > 0 && price > 0) {
-                    productsData.push({
-                        productName,
-                        thickness,
-                        quantity,
-                        price,
-                        discount,
-                        total
-                    });
+                    productsData.push({ productName, thickness, quantity, price, discount, total });
                 }
             });
-            
+
             if (productsData.length === 0) {
                 showNotification('يرجى إضافة منتجات إلى الفاتورة', 'error');
                 return;
             }
-            
+
             let paymentData = {};
             const grandTotal = parseFloat(document.getElementById('grand-total').textContent) || 0;
             const previousBalance = parseFloat(document.getElementById('previous-balance').textContent) || 0;
             const totalDue = grandTotal + previousBalance;
-            
+
             if (document.getElementById('enable-multiple-payments').checked) {
                 const payments = [];
                 let totalPaid = 0;
@@ -2938,13 +2931,11 @@
                     const method = row.querySelector('.payment-method-select').value;
                     const amount = parseFloat(row.querySelector('.payment-amount').value) || 0;
                     if (amount > 0) {
-                        let checkDetails = null;
-                        if (method === 'check') {
-                            const checkNumber = row.querySelector('.check-number')?.value || '';
-                            const checkDate = row.querySelector('.check-date')?.value || '';
-                            const checkImage = row.querySelector('.check-preview')?.src || '';
-                            checkDetails = { checkNumber, checkDate, checkImage };
-                        }
+                        const checkDetails = (method === 'check') ? {
+                            checkNumber: row.querySelector('.check-number')?.value || '',
+                            checkDate: row.querySelector('.check-date')?.value || '',
+                            checkImage: row.querySelector('.check-preview')?.src || ''
+                        } : null;
                         payments.push({ method, amount, checkDetails });
                         totalPaid += amount;
                     }
@@ -2953,19 +2944,17 @@
             } else {
                 const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
                 const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
-                let checkDetails = null;
-                if (paymentMethod === 'check') {
-                    const checkNumber = document.getElementById('check-number-single').value || '';
-                    const checkDate = document.getElementById('check-date-single').value || '';
-                    const checkImage = document.getElementById('check-preview-single').src || '';
-                    checkDetails = { checkNumber, checkDate, checkImage };
-                }
+                const checkDetails = (paymentMethod === 'check') ? {
+                    checkNumber: document.getElementById('check-number-single').value || '',
+                    checkDate: document.getElementById('check-date-single').value || '',
+                    checkImage: document.getElementById('check-preview-single').src || ''
+                } : null;
                 paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: totalDue - paidAmount, checkDetails };
             }
-            
+
             const selectedDate = document.getElementById('invoice-date-input').value;
             const invoiceDate = selectedDate ? new Date(selectedDate + 'T12:00:00').toISOString() : new Date().toISOString();
-            
+
             const invoice = {
                 id: editingInvoiceId || generateInvoiceId(),
                 date: invoiceDate,
@@ -2979,37 +2968,64 @@
                 status: paymentData.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة'
             };
 
+            // --- Logic for updating client balance ---
+            let client = clients.find(c => c.name === clientName);
+            const isNewClient = !client;
+
+            if (isNewClient) {
+                client = {
+                    id: Date.now().toString(), name: clientName, address: clientAddress, phone: clientPhone,
+                    balance: 0, createdAt: new Date().toISOString(), payments: [], adjustments: []
+                };
+            } else {
+                client.address = clientAddress;
+                client.phone = clientPhone;
+            }
+
+            if (editingInvoiceId && editingInvoiceSnapshot) {
+                const oldRemainingBalance = editingInvoiceSnapshot.payment.remainingBalance || 0;
+                client.balance = (client.balance || 0) - oldRemainingBalance + invoice.payment.remainingBalance;
+            } else {
+                client.balance = (client.balance || 0) + invoice.payment.remainingBalance;
+            }
+
+            if (isNewClient) {
+                clients.push(client);
+            }
+            localStorage.setItem('clients', JSON.stringify(clients));
+            // --- End of client logic ---
+
             if (editingInvoiceId) {
                 invoices = invoices.filter(inv => inv.id !== editingInvoiceId);
                 purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== editingInvoiceId);
-                localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
             }
-            
+
             productsData.forEach(product => {
-                addToPurchaseHistory(product.productName, product.thickness, product.quantity, product.price, clientName, invoice.id);
+                addToPurchaseHistory(product.productName, product.thickness, product.quantity, product.price, product.total, clientName, invoice.id);
             });
-            
+
             invoices.push(invoice);
             localStorage.setItem('invoices', JSON.stringify(invoices));
-            
-            updateClientBalance(clientName, paymentData.remainingBalance);
-            
+
             try {
+                await sendToCloud({ action: 'saveClient', client: client });
+
                 if (editingInvoiceId) {
                     await sendToCloud({ action: 'deleteInvoice', invoiceId: editingInvoiceId });
                 }
                 await sendToCloud({ action: 'saveInvoice', invoice: invoice });
+
                 await fetchCloudData();
                 showNotification(editingInvoiceId ? 'تم تعديل الفاتورة بنجاح' : 'تم حفظ الفاتورة بنجاح');
             } catch (err) {
-                console.error('فشل إرسال الفاتورة للسحابة:', err);
-                showNotification('تم حفظ الفاتورة محليًا لكن لم يتم إرسالها للسحابة', 'error');
+                console.error('فشل مزامنة الفاتورة/العميل:', err);
+                showNotification('تم الحفظ محليًا لكن فشلت المزامنة السحابية', 'error');
             }
-            
+
             editingInvoiceId = null;
             editingInvoiceSnapshot = null;
             resetInvoiceForm();
-            
+
             loadReports();
             updateDashboard();
             loadInvoicesHistory();
@@ -4503,38 +4519,9 @@ async function addPayment() {
                     <div class="total-section">
                         <div>المجموع: ${purchase.total.toFixed(2)} دينار</div>
                     </div>
-                    <div style="margin-top: 8px;">
-                        <button class="btn btn-danger delete-purchase-entry" data-id="${purchase.id}">
-                            <i class="fas fa-trash"></i> حذف
-                        </button>
-                    </div>
                 `;
-                
-                purchaseDiv.querySelector('.delete-purchase-entry').addEventListener('click', function() {
-                    deletePurchaseEntry(purchase.id);
-                });
                 purchaseHistoryDiv.appendChild(purchaseDiv);
             });
-        }
-        
-        function deletePurchaseEntry(purchaseId) {
-            if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return;
-            
-            purchaseHistory = purchaseHistory.filter(p => p.id !== purchaseId);
-            localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
-
-            try {
-                sendToCloud({ action: 'deletePurchase', purchaseId: purchaseId });
-                showNotification('تم حذف سجل الشراء بنجاح.');
-            } catch (err) {
-                console.error('فشل حذف سجل الشراء من السحابة:', err);
-                showNotification('تم الحذف محلياً، لكن فشلت المزامنة السحابية', 'error');
-            }
-
-            loadPurchaseHistory();
-            loadSteelThicknessPurchases();
-            loadProductSalesTotals();
-            updateDashboard();
         }
 
         function loadSteelThicknessPurchases() {
@@ -4548,7 +4535,7 @@ async function addPayment() {
             const thicknessTotals = {};
             purchaseHistory.forEach(purchase => {
                 const thickness = purchase.thickness;
-                if (thickness) {
+                if (thickness !== null && thickness !== undefined) {
                     const key = `${thickness} مم`;
                     if (!thicknessTotals[key]) {
                         thicknessTotals[key] = { quantity: 0, total: 0 };
