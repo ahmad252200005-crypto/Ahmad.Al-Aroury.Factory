@@ -1453,7 +1453,7 @@
                 </div>
                 <div class="stat-item">
                     <div class="stat-value" id="total-purchases">0</div>
-                    <div class="stat-label">المشتريات</div>
+                    <div class="stat-label">المبيعات</div>
                 </div>
             </div>
         </div>
@@ -1496,7 +1496,7 @@
                 <i class="fas fa-history"></i> سجل الفواتير
             </div>
             <div class="tab" data-tab="purchases">
-                <i class="fas fa-shopping-cart"></i> سجل المشتريات
+                <i class="fas fa-shopping-cart"></i> سجل المبيعات
             </div>
             <div class="tab" data-tab="employees">
                 <i class="fas fa-user-tie"></i> كشوف العمال
@@ -1734,7 +1734,7 @@
                     <div class="client-financial-info">
                         <h4>المعلومات المالية</h4>
                         <div>الرصيد الحالي: <span id="current-client-balance">0.00</span> دينار</div>
-                        <div>إجمالي المشتريات: <span id="total-client-purchases">0.00</span> دينار</div>
+                        <div>إجمالي المبيعات: <span id="total-client-purchases">0.00</span> دينار</div>
                         <div>إجمالي المدفوعات: <span id="total-client-payments">0.00</span> دينار</div>
                     </div>
                     
@@ -1821,12 +1821,12 @@
                     <i class="fas fa-search"></i> بحث
                 </button>
                 <button class="btn btn-danger" id="clear-all-purchases" style="margin-top: 10px; width: auto;">
-                    <i class="fas fa-trash"></i> مسح جميع المشتريات
+                    <i class="fas fa-trash"></i> مسح جميع المبيعات
                 </button>
             </div>
             
             <div class="purchase-history-section">
-                <h3 id="purchase-client-name">سجل المشتريات</h3>
+                <h3 id="purchase-client-name">سجل المبيعات</h3>
                 <div id="purchase-history">
                     <!-- سيتم عرض سجل المشتريات هنا -->
                 </div>
@@ -1834,7 +1834,7 @@
             
             <div class="total-purchases-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
-                    <h3>إجمالي المشتريات حسب السماكة</h3>
+                    <h3>إجمالي المبيعات حسب السماكة</h3>
                     <div class="actions" style="margin-top: 0;">
                         <button class="btn btn-info" id="print-thickness-summary" style="padding: 8px 12px; font-size: 13px;">
                             <i class="fas fa-print"></i> طباعة الملخص
@@ -1984,10 +1984,10 @@
             
             <div class="client-info" style="margin-top: 30px;">
                 <h3>معلومات عن الحسابات</h3>
-                <p><strong>معادلة حساب الوزن:</strong> الوزن = عرض الشريحة × السماكة × 300 × 7.85</p>
-                <p><strong>معادلة حساب السماكة:</strong> السماكة = الوزن ÷ (عرض الشريحة × 300 × 7.85)</p>
-                <p><strong>معادلة حساب عرض الشريحة:</strong> عرض الشريحة = الوزن ÷ (السماكة × 300 × 7.85)</p>
-                <p><strong>ملاحظة:</strong> 7.85 هو كثافة الحديد (جرام/سم³)، 300 هو الطول الثابت (سم)</p>
+                <p><strong>معادلة حساب الوزن (كجم):</strong> الوزن = عرض الشريحة (سم) × السماكة (مم) × 0.2355</p>
+                <p><strong>معادلة حساب السماكة (مم):</strong> السماكة = الوزن (كجم) ÷ (عرض الشريحة (سم) × 0.2355)</p>
+                <p><strong>معادلة حساب عرض الشريحة (سم):</strong> عرض الشريحة = الوزن (كجم) ÷ (السماكة (مم) × 0.2355)</p>
+                <p><strong>ملاحظة:</strong> المعامل <strong>0.2355</strong> مشتق من: (طول الشريحة 300 سم × كثافة الحديد 7.85 جم/سم³) مقسوماً على (10 لتحويل السماكة من مم إلى سم) ومقسوماً على (1000 لتحويل الوزن من جم إلى كجم).</p>
             </div>
         </div>
         
@@ -3744,7 +3744,7 @@
                 return inv.client.name === clientName && invoiceDate >= threeMonthsAgo;
             });
 
-            let statementHtml = '<h4>المشتريات خلال آخر 3 أشهر</h4>';
+            let statementHtml = '<h4>المبيعات خلال آخر 3 أشهر</h4>';
 
             if (monthlyInvoices.length === 0) {
                 statementHtml += '<p>لا توجد مشتريات لهذا العميل في آخر 3 أشهر.</p>';
@@ -4973,56 +4973,67 @@ async function addPayment() {
         function calculateSteel() {
             const calculationType = document.getElementById('calculation-type').value;
             let resultHTML = '';
-            
-            if (calculationType === '1') {
+
+            // الكثافة (جرام/سم^3), الطول (سم)
+            const DENSITY = 7.85;
+            const LENGTH = 300;
+            // معامل التحويل من (عرض بالـ سم * سماكة بالـ مم) إلى وزن بالكيلوجرام
+            // (الطول * الكثافة) / (10 لتحويل مم إلى سم) / (1000 لتحويل جرام إلى كجم)
+            const CONVERSION_FACTOR = (LENGTH * DENSITY) / 10 / 1000; // 0.2355
+
+            if (calculationType === '1') { // حساب الوزن
                 const width = parseFloat(document.getElementById('sheet-width').value);
                 const thickness = parseFloat(document.getElementById('sheet-thickness').value);
-                
-                if (!width || !thickness) {
-                    showNotification('يرجى إدخال جميع القيم المطلوبة', 'error');
+
+                if (!width || !thickness || width <= 0 || thickness <= 0) {
+                    showNotification('يرجى إدخال قيم موجبة وصحيحة للعرض والسماكة', 'error');
                     return;
                 }
-                
-                const weight = width * thickness * 300 * 7.85;
+
+                const weight = width * thickness * CONVERSION_FACTOR;
                 resultHTML = `
-                    <p><strong>الوزن:</strong> ${weight.toFixed(2)} كجم</p>
+                    <p><strong>الوزن المحسوب:</strong> <span style="font-weight: bold; color: #2c3e50;">${weight.toFixed(3)} كجم</span></p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
+                    <p style="color: #7f8c8d;">بناءً على:</p>
                     <p><strong>عرض الشريحة:</strong> ${width} سم</p>
                     <p><strong>السماكة:</strong> ${thickness} مم</p>
                 `;
-            } else if (calculationType === '2') {
+            } else if (calculationType === '2') { // حساب السماكة
                 const width = parseFloat(document.getElementById('sheet-width').value);
                 const weight = parseFloat(document.getElementById('sheet-weight').value);
-                
-                if (!width || !weight) {
-                    showNotification('يرجى إدخال جميع القيم المطلوبة', 'error');
+
+                if (!width || !weight || width <= 0 || weight <= 0) {
+                    showNotification('يرجى إدخال قيم موجبة وصحيحة للعرض والوزن', 'error');
                     return;
                 }
-                
-                const c = width * 300 * 7.85;
-                const thickness = weight / c;
+
+                const thickness = weight / (width * CONVERSION_FACTOR);
                 resultHTML = `
-                    <p><strong>السماكة:</strong> ${thickness.toFixed(4)} مم</p>
+                    <p><strong>السماكة المحسوبة:</strong> <span style="font-weight: bold; color: #2c3e50;">${thickness.toFixed(3)} مم</span></p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
+                    <p style="color: #7f8c8d;">بناءً على:</p>
                     <p><strong>عرض الشريحة:</strong> ${width} سم</p>
                     <p><strong>الوزن:</strong> ${weight} كجم</p>
                 `;
-            } else if (calculationType === '3') {
+            } else if (calculationType === '3') { // حساب عرض الشريحة
                 const thickness = parseFloat(document.getElementById('sheet-thickness').value);
                 const weight = parseFloat(document.getElementById('sheet-weight').value);
-                
-                if (!thickness || !weight) {
-                    showNotification('يرجى إدخال جميع القيم المطلوبة', 'error');
+
+                if (!thickness || !weight || thickness <= 0 || weight <= 0) {
+                    showNotification('يرجى إدخال قيم موجبة وصحيحة للسماكة والوزن', 'error');
                     return;
                 }
-                
-                const v = thickness * 300 * 7.85;
-                const width = weight / v;
+
+                const width = weight / (thickness * CONVERSION_FACTOR);
                 resultHTML = `
-                    <p><strong>عرض الشريحة:</strong> ${width.toFixed(2)} سم</p>
+                    <p><strong>عرض الشريحة المحسوب:</strong> <span style="font-weight: bold; color: #2c3e50;">${width.toFixed(2)} سم</span></p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
+                    <p style="color: #7f8c8d;">بناءً على:</p>
                     <p><strong>السماكة:</strong> ${thickness} مم</p>
                     <p><strong>الوزن:</strong> ${weight} كجم</p>
                 `;
             }
-            
+
             document.getElementById('result-details').innerHTML = resultHTML;
             document.getElementById('calculator-result').style.display = 'block';
         }
@@ -5568,7 +5579,7 @@ async function addPayment() {
             openProfessionalPrintWindow(`كشف حساب - ${clientName}`, printBody);
         });
         // ------------------- ربط الأحداث -------------------
-        document.getElementById('print-thickness-summary').addEventListener('click', () => printElementContent('steel-thickness-purchases', 'ملخص المشتريات حسب السماكة'));
+        document.getElementById('print-thickness-summary').addEventListener('click', () => printElementContent('steel-thickness-purchases', 'ملخص المبيعات حسب السماكة'));
         document.getElementById('print-products-summary').addEventListener('click', () => printElementContent('product-sales-totals', 'ملخص المبيعات حسب المنتج'));
         document.getElementById('update-date-btn').addEventListener('click', updateDatesFromInput);
         document.getElementById('add-product').addEventListener('click', addProductRow);
@@ -5645,7 +5656,7 @@ async function addPayment() {
             }
         });
         document.getElementById('clear-all-purchases').addEventListener('click', async function() {
-            if(confirm('هل أنت متأكد من مسح جميع سجل المشتريات؟ هذا الإجراء لا يمكن التراجع عنه.')) {
+            if(confirm('هل أنت متأكد من مسح جميع سجل المبيعات  هذا الإجراء لا يمكن التراجع عنه.')) {
                 const password = prompt('يرجى إدخال كلمة المرور للمتابعة:');
                 if (password === DELETE_PASSWORD) {
                     purchaseHistory = [];
@@ -5658,10 +5669,10 @@ async function addPayment() {
                         if (cloudResult) {
                             await fetchCloudData();
                         }
-                        showNotification('تم مسح جميع المشتريات بنجاح');
+                        showNotification('تم مسح جميع المبيعات بنجاح');
                     } catch (err) {
-                        console.error('فشل مسح المشتريات من السحابة:', err);
-                        showNotification('تم مسح المشتريات محليًا لكن لم يتم حذفها من السحابة', 'error');
+                        console.error('فشل مسح المبيعات  من السحابة:', err);
+                        showNotification('تم مسح المبيعات محليًا لكن لم يتم حذفها من السحابة', 'error');
                     }
                     updateDashboard();
                 } else {
