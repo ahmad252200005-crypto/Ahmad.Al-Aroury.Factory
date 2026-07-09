@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نظام إدارة المصنع المتكامل - مصنع أحمد العاروري</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         /* جميع الأنماط كما هي (نفس الكود السابق) مع إضافة بعض التحسينات للجداول */
         * {
@@ -1422,6 +1424,18 @@
         </div>
     </div>
     
+    <!-- Financial Ledger Modal -->
+    <div class="modal" id="ledgerModal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3 id="ledger-client-name"></h3>
+            <div id="ledger-content" style="max-height: 60vh; overflow-y: auto; text-align: right; padding: 10px;"></div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn btn-info" id="printLedger"><i class="fas fa-print"></i> طباعة الكشف</button>
+                <button class="btn btn-secondary" id="closeLedger">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- لوحة التحكم -->
         <div class="dashboard-header no-print">
@@ -1493,6 +1507,9 @@
             <div class="tab" data-tab="reports">
                 <i class="fas fa-chart-bar"></i> التقارير
             </div>
+            <div class="tab" data-tab="ledger">
+                <i class="fas fa-book-open"></i> دفتر الذمم
+            </div>
         </div>
         
         <!-- تبويب إنشاء الفاتورة -->
@@ -1555,7 +1572,7 @@
                         <th width="20%">اسم المنتج</th>
                         <th width="10%">السماكة (مم)</th>
                         <th width="10%">الكمية</th>
-                        <th width="15%">سعر الوحدة (شامل الضريبة)</th>
+                        <th width="15%">سعر الوحدة</th>
                         <th width="10%">الخصم (%)</th>
                         <th width="15%">المجموع</th>
                         <th width="10%" class="no-print">إجراءات</th>
@@ -1578,7 +1595,7 @@
             <div class="total-section">
                 <div>المجموع الفرعي: <span id="subtotal">0.00</span> دينار</div>
                 <div>إجمالي الخصم: <span id="total-discount">0.00</span> دينار</div>
-                <div>الضريبة (16%): <span id="total-tax">0.00</span> دينار</div>
+                <div style="display: none;">الضريبة (16%): <span id="total-tax">0.00</span> دينار</div>
                 <div class="grand-total">المجموع الكلي: <span id="grand-total">0.00</span> دينار</div>
             </div>
             
@@ -1737,6 +1754,13 @@
                                 </select>
                             </div>
                         </div>
+                        <div id="client-payment-check-fields" class="check-fields" style="display: none; margin-top: 15px;">
+                            <div><strong>رقم الشيك:</strong> <input type="text" id="client-check-number" placeholder="رقم الشيك"></div>
+                            <div><strong>تاريخ الصرف:</strong> <input type="date" id="client-check-date"></div>
+                            <div><strong>صورة الشيك:</strong> <input type="file" id="client-check-image" accept="image/*"></div>
+                            <div><img id="client-check-preview" class="check-image-preview" style="display: none;"></div>
+                        </div>
+
                         <div class="actions">
                             <button class="btn btn-success" id="add-payment">
                                 <i class="fas fa-plus"></i> إضافة الدفعة
@@ -1809,14 +1833,28 @@
             </div>
             
             <div class="total-purchases-section">
-                <h3>إجمالي المشتريات حسب السماكة</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+                    <h3>إجمالي المشتريات حسب السماكة</h3>
+                    <div class="actions" style="margin-top: 0;">
+                        <button class="btn btn-info" id="print-thickness-summary" style="padding: 8px 12px; font-size: 13px;">
+                            <i class="fas fa-print"></i> طباعة الملخص
+                        </button>
+                    </div>
+                </div>
                 <div class="steel-thickness-section">
                     <div id="steel-thickness-purchases">
                         <!-- سيتم عرض المشتريات حسب السماكة هنا -->
                     </div>
                 </div>
                 
-                <h3 style="margin-top: 30px;">إجمالي المبيعات حسب المنتج</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-top: 30px; margin-bottom: 10px;">
+                    <h3>إجمالي المبيعات حسب المنتج</h3>
+                    <div class="actions" style="margin-top: 0;">
+                        <button class="btn btn-info" id="print-products-summary" style="padding: 8px 12px; font-size: 13px;">
+                            <i class="fas fa-print"></i> طباعة الملخص
+                        </button>
+                    </div>
+                </div>
                 <div class="product-sales-section">
                     <div id="product-sales-totals">
                         <!-- سيتم عرض إجمالي المبيعات لكل منتج هنا -->
@@ -2127,6 +2165,55 @@
                             <!-- سيتم عرض تفاصيل المبيعات السنوية هنا -->
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- تبويب دفتر الذمم -->
+        <div class="tab-content" id="ledger-tab">
+            <h1><i class="fas fa-book-open"></i> دفتر الذمم</h1>
+
+            <div class="client-info">
+                <h3><i class="fas fa-plus-circle"></i> إضافة أو تعديل ذمة يدوياً</h3>
+                <p>استخدم هذا النموذج لإضافة دين سابق على عميل أو لتسوية رصيده يدوياً لأي سبب.</p>
+                <div class="client-details">
+                    <div>
+                        <strong>اختر العميل:</strong>
+                        <div class="autocomplete">
+                            <input type="text" id="ledger-client-search" placeholder="ابحث عن اسم العميل">
+                            <div id="ledger-client-autocomplete-list" class="autocomplete-items"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <strong>المبلغ (دينار):</strong>
+                        <input type="number" id="ledger-amount" placeholder="مبلغ موجب للدين, سالب للتسديد">
+                    </div>
+                    <div>
+                        <strong>السبب أو البيان:</strong>
+                        <input type="text" id="ledger-reason" placeholder="مثال: رصيد افتتاحي, تسوية...">
+                    </div>
+                </div>
+                <div class="actions" style="justify-content: flex-start;">
+                    <button class="btn btn-success" id="add-ledger-entry">
+                        <i class="fas fa-save"></i> حفظ الإدخال
+                    </button>
+                </div>
+            </div>
+
+            <div class="purchase-history-section" style="margin-top: 30px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+                    <h3><i class="fas fa-list-ul"></i> قائمة العملاء المدينين (عليهم ذمم)</h3>
+                    <div class="actions" style="margin-top: 0;">
+                        <button class="btn btn-info" id="print-debtors-list">
+                            <i class="fas fa-print"></i> طباعة القائمة
+                        </button>
+                    </div>
+                </div>
+                <div id="debtors-list-container">
+                    <!-- سيتم عرض قائمة المدينين هنا -->
+                </div>
+                <div class="total-section" style="margin-top: 20px;">
+                    <div class="grand-total">إجمالي الذمم على العملاء: <span id="total-debtors-balance">0.00</span> دينار</div>
                 </div>
             </div>
         </div>
@@ -2441,6 +2528,7 @@
             thickInput.value = '0';
             thickInput.min = '0';
             thickInput.step = '0.1';
+            thickInput.addEventListener('focus', function() { this.select(); });
             const thickSpan = document.createElement('span');
             thickSpan.className = 'print-value';
             thickSpan.style.display = 'none';
@@ -2456,6 +2544,7 @@
             qtyInput.className = 'quantity';
             qtyInput.value = '1';
             qtyInput.min = '1';
+            qtyInput.addEventListener('focus', function() { this.select(); });
             const qtySpan = document.createElement('span');
             qtySpan.className = 'print-value';
             qtySpan.style.display = 'none';
@@ -2472,6 +2561,7 @@
             priceInput.value = '0.00';
             priceInput.min = '0';
             priceInput.step = '0.01';
+            priceInput.addEventListener('focus', function() { this.select(); });
             const priceSpan = document.createElement('span');
             priceSpan.className = 'print-value';
             priceSpan.style.display = 'none';
@@ -2488,6 +2578,7 @@
             discInput.value = '0';
             discInput.min = '0';
             discInput.max = '100';
+            discInput.addEventListener('focus', function() { this.select(); });
             const discSpan = document.createElement('span');
             discSpan.className = 'print-value';
             discSpan.style.display = 'none';
@@ -3266,7 +3357,8 @@
                     phone,
                     balance: 0,
                     createdAt: new Date().toISOString(),
-                    payments: []
+                    payments: [],
+                    adjustments: []
                 };
                 
                 clients.push(client);
@@ -3319,14 +3411,20 @@
                 ${client.balance > 0 ? ' (مدين)' : client.balance < 0 ? ' (دائن)' : ''}
             </div>
             <div style="display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap;">
-                <button class="btn view-client-invoices" style="flex: 1; min-width: 90px;" data-client-name="${client.name}">
+                <button class="btn btn-info view-client-invoices" style="flex: 1; min-width: 90px;" data-client-name="${client.name}">
                     <i class="fas fa-eye"></i> عرض
+                </button>
+                <button class="btn btn-info financial-record" style="flex: 1; min-width: 120px;" data-client-name="${client.name}">
+                    <i class="fas fa-file-invoice-dollar"></i> السجل المالي
+                </button>
+                <button class="btn btn-warning monthly-statement" style="flex: 1; min-width: 120px;" data-client-name="${client.name}">
+                    <i class="fas fa-calendar-alt"></i> كشف حساب
                 </button>
                 <button class="btn btn-secondary edit-client" style="flex: 1; min-width: 90px;" data-client-name="${client.name}">
                     <i class="fas fa-edit"></i> تعديل
                 </button>
-                <button class="btn btn-danger delete-client" style="flex: 0 0 auto;" data-client-name="${client.name}">
-                    <i class="fas fa-trash"></i> حذف
+                <button class="btn btn-success add-payment-shortcut" style="flex: 1; min-width: 120px;" data-client-name="${client.name}">
+                    <i class="fas fa-money-bill-wave"></i> إضافة دفعة
                 </button>
             </div>
         `;
@@ -3334,6 +3432,21 @@
         item.querySelector('.view-client-invoices').addEventListener('click', function() {
             const clientName = this.getAttribute('data-client-name');
             viewClientInvoices(clientName);
+        });
+
+        item.querySelector('.financial-record').addEventListener('click', function() {
+            const clientName = this.getAttribute('data-client-name');
+            viewFinancialLedger(clientName);
+        });
+
+        item.querySelector('.monthly-statement').addEventListener('click', function() {
+            const clientName = this.getAttribute('data-client-name');
+            viewMonthlyStatement(clientName);
+        });
+
+        item.querySelector('.add-payment-shortcut').addEventListener('click', function() {
+            const clientName = this.getAttribute('data-client-name');
+            showAddPaymentForClient(clientName);
         });
 
         item.querySelector('.edit-client').addEventListener('click', function() {
@@ -3346,11 +3459,6 @@
                 editingClientName = clientToEdit.name;
                 showNotification('تم تهيئة العميل للتعديل');
             }
-        });
-        
-        item.querySelector('.delete-client').addEventListener('click', function() {
-            const clientName = this.getAttribute('data-client-name');
-            deleteSingleClient(clientName);
         });
         
         clientList.appendChild(item);
@@ -3499,29 +3607,212 @@
             }
         }
         
+        function viewFinancialLedger(clientName) {
+            const client = clients.find(c => c.name === clientName);
+            if (!client) {
+                showNotification('لم يتم العثور على العميل', 'error');
+                return;
+            }
+
+            const clientInvoices = invoices.filter(inv => inv.client.name === clientName);
+            const clientPayments = client.payments || [];
+            const clientAdjustments = client.adjustments || [];
+
+            let transactions = [];
+
+            clientInvoices.forEach(inv => {
+                transactions.push({
+                    date: new Date(inv.date),
+                    type: 'invoice',
+                    description: `فاتورة رقم: ${inv.id}`,
+                    debit: inv.grandTotal,
+                    credit: 0
+                });
+            });
+
+            clientPayments.forEach(p => {
+                transactions.push({
+                    date: new Date(p.date),
+                    type: 'payment',
+                    description: `دفعة (${getPaymentMethodText(p.method)})`,
+                    debit: 0,
+                    credit: p.amount
+                });
+            });
+
+            clientAdjustments.forEach(adj => {
+                transactions.push({
+                    date: new Date(adj.date),
+                    type: 'adjustment',
+                    description: `تسوية يدوية: ${adj.reason}`,
+                    debit: adj.amount > 0 ? adj.amount : 0,
+                    credit: adj.amount < 0 ? -adj.amount : 0
+                });
+            });
+
+            transactions.sort((a, b) => a.date - b.date);
+
+            let runningBalance = 0;
+            let ledgerHtml = `
+                <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+                    <thead>
+                        <tr style="background-color: #f2f2f2;">
+                            <th style="padding: 8px; border: 1px solid #ddd;">التاريخ</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">البيان</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">مدين</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">دائن</th>
+                            <th style="padding: 8px; border: 1px solid #ddd;">الرصيد</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            transactions.forEach(t => {
+                runningBalance += t.debit - t.credit;
+                ledgerHtml += `
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align:center;">${t.date.toLocaleDateString('ar-EG')}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(t.description)}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; color: #c0392b; text-align:center;">${t.debit > 0 ? t.debit.toFixed(2) : ''}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; color: #27ae60; text-align:center;">${t.credit > 0 ? t.credit.toFixed(2) : ''}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align:center;">${runningBalance.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+
+            ledgerHtml += `
+                    </tbody>
+                </table>
+            `;
+
+            const finalBalance = runningBalance; 
+
+            document.getElementById('ledger-client-name').innerHTML = `
+                السجل المالي للعميل: <strong>${escapeHtml(clientName)}</strong>
+                <div style="font-size: 16px; margin-top: 10px;">
+                    الرصيد النهائي المحسوب: <strong class="${finalBalance > 0 ? 'balance-negative' : 'balance-positive'}">${finalBalance.toFixed(2)} دينار</strong>
+                    ${finalBalance > 0 ? ' (مدين)' : finalBalance < 0 ? ' (دائن)' : ''}
+                </div>
+                <div style="font-size: 12px; color: #777;">(الرصيد المسجل: ${client.balance.toFixed(2)})</div>
+            `;
+            document.getElementById('ledger-content').innerHTML = ledgerHtml;
+            document.getElementById('ledgerModal').style.display = 'flex';
+        }
+
+        function showAddPaymentForClient(clientName) {
+            // First, ensure the correct client's details are shown by reusing the view function
+            viewClientInvoices(clientName);
+            
+            // Then, specifically show the payment form within that section
+            const paymentForm = document.getElementById('payment-form');
+            paymentForm.style.display = 'block';
+            
+            // Scroll to the form to make it visible for the user
+            paymentForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function viewMonthlyStatement(clientName) {
+            const client = clients.find(c => c.name === clientName);
+            if (!client) {
+                showNotification('لم يتم العثور على العميل', 'error');
+                return;
+            }
+
+            // Get date three months ago
+            const threeMonthsAgo = new Date();
+            threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+            // Filter invoices for the client from the last three months
+            const monthlyInvoices = invoices.filter(inv => {
+                const invoiceDate = new Date(inv.date);
+                return inv.client.name === clientName && invoiceDate >= threeMonthsAgo;
+            });
+
+            let statementHtml = '<h4>المشتريات خلال آخر 3 أشهر</h4>';
+
+            if (monthlyInvoices.length === 0) {
+                statementHtml += '<p>لا توجد مشتريات لهذا العميل في آخر 3 أشهر.</p>';
+            } else {
+                statementHtml += `
+                    <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="background-color: #f2f2f2;">
+                                <th style="padding: 8px; border: 1px solid #ddd;">تاريخ الفاتورة</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">رقم الفاتورة</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">المنتجات</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">المجموع</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                monthlyInvoices.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                monthlyInvoices.forEach(inv => {
+                    const productsDetails = inv.products.map(p => 
+                        `<div>${escapeHtml(p.productName)} (الكمية: ${p.quantity}, السعر: ${p.price.toFixed(2)})</div>`
+                    ).join('');
+
+                    statementHtml += `
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #ddd; text-align:center;">${new Date(inv.date).toLocaleDateString('ar-EG')}</td>
+                            <td style="padding: 8px; border: 1px solid #ddd; text-align:center;">${escapeHtml(inv.id)}</td>
+                            <td style="padding: 8px; border: 1px solid #ddd;">${productsDetails}</td>
+                            <td style="padding: 8px; border: 1px solid #ddd; text-align:center;">${inv.grandTotal.toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+
+                statementHtml += `</tbody></table>`;
+            }
+
+            const finalBalance = client.balance || 0;
+
+            document.getElementById('ledger-client-name').innerHTML = `
+                كشف حساب شهري للعميل: <strong>${escapeHtml(clientName)}</strong>
+                <div style="font-size: 16px; margin-top: 10px;">
+                    الرصيد الإجمالي المتبقي: <strong class="${finalBalance > 0 ? 'balance-negative' : 'balance-positive'}">${finalBalance.toFixed(2)} دينار</strong>
+                    ${finalBalance > 0 ? ' (مدين)' : finalBalance < 0 ? ' (دائن)' : ''}
+                </div>
+            `;
+            document.getElementById('ledger-content').innerHTML = statementHtml;
+            document.getElementById('ledgerModal').style.display = 'flex';
+        }
+
         function displayClientPayments(client) {
             const clientPayments = document.getElementById('client-payments');
             clientPayments.innerHTML = '';
-            
+
             if (!client.payments || client.payments.length === 0) {
                 clientPayments.innerHTML = '<p>لا توجد دفعات مسجلة</p>';
                 return;
             }
-            
+
             client.payments.forEach(payment => {
                 const paymentDiv = document.createElement('div');
-                paymentDiv.className = 'payment-item';
+                paymentDiv.className = 'invoice-item'; // Re-using style for consistency
+                let checkInfoHTML = '';
+                if (payment.method === 'check' && payment.checkDetails) {
+                    checkInfoHTML += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">`;
+                    checkInfoHTML += `<div><strong>رقم الشيك:</strong> ${payment.checkDetails.checkNumber || 'غير محدد'}</div>`;
+                    checkInfoHTML += `<div><strong>تاريخ الصرف:</strong> ${payment.checkDetails.checkDate || 'غير محدد'}</div>`;
+                    if (payment.checkDetails.checkImage && payment.checkDetails.checkImage.startsWith('data:image')) {
+                        checkInfoHTML += `<div><img src="${payment.checkDetails.checkImage}" style="max-width:100px; max-height:100px; margin-top:5px; border-radius:4px; border: 1px solid #ddd;"></div>`;
+                    }
+                    checkInfoHTML += `</div>`;
+                }
                 paymentDiv.innerHTML = `
-                    <div><strong>${new Date(payment.date).toLocaleDateString('ar-EG')}</strong></div>
-                    <div>المبلغ: ${payment.amount.toFixed(2)} دينار</div>
-                    <div>طريقة الدفع: ${getPaymentMethodText(payment.method)}</div>
+                    <div class="invoice-header-small"><strong>${new Date(payment.date).toLocaleDateString('ar-EG')}</strong></div>
+                    <div><strong>المبلغ:</strong> ${payment.amount.toFixed(2)} دينار</div>
+                    <div><strong>طريقة الدفع:</strong> ${getPaymentMethodText(payment.method)}</div>
+                    ${checkInfoHTML}
                 `;
                 clientPayments.appendChild(paymentDiv);
             });
         }
         
         // ------------------- دوال إدارة العملاء (معدلة لخصم الدفعة من الرصيد) -------------------
-function addPayment() {
+async function addPayment() {
     const amount = parseFloat(document.getElementById('payment-amount').value) || 0;
     const method = document.getElementById('payment-method-select').value;
     
@@ -3543,13 +3834,23 @@ function addPayment() {
     }
     
     const client = clients[clientIndex];
-    
+
+    let checkDetails = null;
+    if (method === 'check') {
+        const checkNumber = document.getElementById('client-check-number').value;
+        const checkDate = document.getElementById('client-check-date').value;
+        const checkImagePreview = document.getElementById('client-check-preview');
+        const checkImage = checkImagePreview.style.display !== 'none' ? checkImagePreview.src : '';
+        checkDetails = { checkNumber, checkDate, checkImage };
+    }
+
     // إنشاء كائن الدفعة
     const payment = {
         id: Date.now().toString(),
         date: new Date().toISOString(),
         amount: amount,
-        method: method
+        method: method,
+        checkDetails: checkDetails
     };
     
     // إضافة الدفعة إلى سجل مدفوعات العميل
@@ -3565,14 +3866,24 @@ function addPayment() {
     // حفظ التغييرات في localStorage
     localStorage.setItem('clients', JSON.stringify(clients));
     
-    // تحديث عرض معلومات العميل
+    try {
+        await sendToCloud({ action: 'saveClient', client: client });
+        showNotification('تم إضافة الدفعة ومزامنتها بنجاح');
+    } catch (err) {
+        console.error('فشل مزامنة الدفعة:', err);
+        showNotification('تم حفظ الدفعة محلياً، لكن فشلت المزامنة السحابية', 'error');
+    }
+
     viewClientInvoices(currentViewingClient);
-    
-    showNotification('تم إضافة الدفعة بنجاح وخصم المبلغ من الرصيد');
     
     // إخفاء نموذج الدفع وإعادة تعيين حقل المبلغ
     document.getElementById('payment-form').style.display = 'none';
     document.getElementById('payment-amount').value = '0.00';
+    document.getElementById('client-payment-check-fields').style.display = 'none';
+    document.getElementById('client-check-number').value = '';
+    document.getElementById('client-check-date').value = '';
+    document.getElementById('client-check-image').value = '';
+    document.getElementById('client-check-preview').style.display = 'none';
 }
         
         function filterClients(searchTerm) {
@@ -3684,6 +3995,9 @@ function addPayment() {
                         <button class="btn btn-secondary edit-invoice" data-invoice-id="${invoice.id}">
                             <i class="fas fa-edit"></i> تعديل الفاتورة
                         </button>
+                        <button class="btn export-pdf" data-invoice-id="${invoice.id}" style="background: linear-gradient(to bottom, #e74c3c, #c0392b);">
+                            <i class="fas fa-file-pdf"></i> تصدير PDF
+                        </button>
                         <button class="btn btn-danger delete-invoice" data-invoice-id="${invoice.id}">
                             <i class="fas fa-trash"></i> حذف الفاتورة
                         </button>
@@ -3695,6 +4009,9 @@ function addPayment() {
                 });
                 invoiceDiv.querySelector('.edit-invoice').addEventListener('click', function() {
                     editInvoice(invoice.id);
+                });
+                invoiceDiv.querySelector('.export-pdf').addEventListener('click', function() {
+                    exportInvoiceAsPDF(invoice.id);
                 });
                 invoiceDiv.querySelector('.delete-invoice').addEventListener('click', function() {
                     deleteInvoice(invoice.id);
@@ -3725,27 +4042,195 @@ function addPayment() {
                 <head>
                     <title>${escapeHtml(title)}</title>
                     <style>
-                        @page { size: A4; margin: 8mm; }
-                        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; margin: 0; padding: 0; color: #233342; background: #fff; }
-                        .print-page { width: 100%; max-width: 190mm; margin: 0 auto; padding: 8mm; box-sizing: border-box; }
-                        .header { text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; margin-bottom: 12px; }
-                        .header h1 { margin: 0; font-size: 20px; color: #2c3e50; }
-                        .header h2 { margin: 4px 0 0; font-size: 13px; color: #5d6d7e; }
-                        .sub-title { margin-top: 6px; font-size: 12px; color: #7f8c8d; }
-                        .card { border: 1px solid #d7e1ea; border-radius: 10px; padding: 10px 12px; margin: 10px 0; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04); page-break-inside: avoid; break-inside: avoid; }
-                        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-                        .row { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10pt; page-break-inside: auto; }
-                        th, td { border: 1px solid #d7e1ea; padding: 6px; text-align: center; page-break-inside: avoid; break-inside: avoid; }
-                        th { background: #f5f7fa; color: #2c3e50; }
-                        .total-row { font-weight: bold; background: #f9fbfd; }
-                        .signature { display: flex; justify-content: space-between; gap: 20px; margin-top: 16px; color: #5d6d7e; font-size: 10pt; page-break-inside: avoid; break-inside: avoid; }
-                        .footer { margin-top: 12px; font-size: 9pt; color: #7f8c8d; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
-                        @media print { body { background: #fff; } .print-page { padding: 0; } }
+                        @page { 
+                            size: A4; 
+                            margin: 10mm; 
+                        }
+                        body { 
+                            font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
+                            margin: 0; 
+                            padding: 0; 
+                            color: #333; 
+                            background: #f0f2f5; /* Background for the print preview window */
+                            -webkit-print-color-adjust: exact; 
+                            print-color-adjust: exact;
+                        }
+                        .print-page { 
+                            width: 100%; 
+                            max-width: 210mm;
+                            min-height: 280mm; /* Approximate A4 height minus margins */
+                            padding: 10mm;
+                            margin: 10px auto;
+                            box-sizing: border-box; 
+                            background: #fff;
+                            position: relative;
+                            box-shadow: 0 0 10px rgba(0,0,0,0.1); /* Shadow for preview */
+                        }
+                        .watermark {
+                            position: absolute;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%);
+                            opacity: 0.07;
+                            z-index: 1;
+                            pointer-events: none;
+                            width: 60%;
+                        }
+                        .header { 
+                            text-align: center;
+                            border-bottom: 2px solid #888; 
+                            padding-bottom: 15px; 
+                            margin-bottom: 10px; 
+                        }
+                        .header-info {
+                            text-align: right;
+                        }
+                        .header h1 { 
+                            margin: 0; 
+                            font-size: 22pt;
+                            color: #2c3e50; 
+                            font-weight: bold;
+                        }
+                        .header h2 { 
+                            margin: 5px 0 0;
+                            font-size: 13pt;
+                            color: #555;
+                        }
+                        .document-title {
+                            text-align: center;
+                            margin: 30px 0 25px 0;
+                        }
+                        .document-title h3 {
+                            font-size: 18pt;
+                            font-weight: bold;
+                            color: #34495e;
+                            display: inline-block;
+                            padding-bottom: 5px;
+                            border-bottom: 1px solid #ccc;
+                            margin: 0;
+                        }
+                        .card { 
+                            border: 1px solid #eee; 
+                            border-radius: 8px; 
+                            padding: 15px; 
+                            margin: 15px 0; 
+                            page-break-inside: avoid; 
+                        }
+                        .info-grid { 
+                            display: grid; 
+                            grid-template-columns: 1fr 1fr; 
+                            gap: 15px; 
+                            font-size: 10pt;
+                        }
+                        .info-grid .row { 
+                            display: flex; 
+                            justify-content: space-between; 
+                            padding: 6px 0;
+                            border-bottom: 1px dotted #ddd;
+                        }
+                        .info-grid .row:last-child {
+                            border-bottom: none;
+                        }
+                        table { 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                            margin-top: 10px; 
+                            font-size: 9pt; 
+                        }
+                        th, td { 
+                            border: 1px solid #ccc; 
+                            padding: 7px; 
+                            text-align: right;
+                        }
+                        th { 
+                            background: #f2f2f2; 
+                            color: #333;
+                            font-weight: bold;
+                        }
+                        tr:nth-child(even) {
+                            background-color: #f9f9f9;
+                        }
+                        .totals-table .label {
+                            text-align: right;
+                            font-weight: bold;
+                        }
+                        .totals-table .value {
+                            text-align: left;
+                        }
+                        .report-summary {
+                            display: grid;
+                            grid-template-columns: repeat(2, 1fr);
+                            gap: 15px;
+                            margin-bottom: 20px;
+                            page-break-inside: avoid;
+                        }
+                        .summary-card {
+                            border: 1px solid #ddd;
+                            border-radius: 8px;
+                            padding: 15px;
+                            text-align: center;
+                            background-color: #f9f9f9;
+                        }
+                        .summary-card h4 {
+                            margin: 0 0 10px 0;
+                            font-size: 11pt;
+                            color: #333;
+                            font-weight: bold;
+                        }
+                        .summary-card .value {
+                            font-size: 14pt;
+                            font-weight: bold;
+                            color: #3498db;
+                        }
+                        .summary-card .sub-value {
+                            font-size: 9pt;
+                            color: #777;
+                            margin-top: 5px;
+                        }
+                        .grand-total-row {
+                            font-weight: bold; 
+                            font-size: 11pt;
+                            background-color: #e9ecef;
+                        }
+                        .signature-section { 
+                            display: flex; 
+                            justify-content: space-around;
+                            margin-top: 60px;
+                            padding-top: 20px;
+                            page-break-inside: avoid; 
+                        }
+                        .signature-box {
+                            text-align: center;
+                            font-size: 11pt;
+                            color: #555;
+                        }
+                        .signature-line {
+                            border-top: 1px solid #888;
+                            width: 200px;
+                            margin-top: 40px;
+                        }
+                        .print-footer { 
+                            margin-top: 20px; 
+                            font-size: 9pt; 
+                            color: #999; 
+                            text-align: center; 
+                            border-top: 1px solid #eee; 
+                            padding-top: 10px; 
+                            page-break-before: auto;
+                        }
+                        @media print { 
+                            body { background: #fff; } 
+                            .print-page { 
+                                padding: 0; 
+                                margin: 0;
+                                box-shadow: none;
+                                min-height: 0;
+                            } 
+                        }
                     </style>
                 </head>
                 <body>
-                    <div class="print-page">${bodyHtml}</div>
+                    ${bodyHtml}
                 </body>
                 </html>
             `);
@@ -3761,9 +4246,9 @@ function addPayment() {
                 return `
                     <tr>
                         <td>${escapeHtml(product.productName || '')}${escapeHtml(thicknessText)}</td>
-                        <td>${(product.quantity || 0).toFixed(2)}</td>
-                        <td>${(product.price || 0).toFixed(2)}</td>
-                        <td>${(product.total || 0).toFixed(2)}</td>
+                        <td style="text-align:center;">${(product.quantity || 0).toFixed(2)}</td>
+                        <td style="text-align:center;">${(product.price || 0).toFixed(2)}</td>
+                        <td style="text-align:center;">${(product.total || 0).toFixed(2)}</td>
                     </tr>
                 `;
             }).join('');
@@ -3771,31 +4256,32 @@ function addPayment() {
             let paymentContent = '';
             if (invoice.payment?.type === 'multiple') {
                 paymentContent = (invoice.payment.payments || []).map(p => `
-                    <div class="row"><span>${escapeHtml(getPaymentMethodText(p.method))}</span><span>${(p.amount || 0).toFixed(2)} دينار</span></div>
+                    <tr><td class="label">${escapeHtml(getPaymentMethodText(p.method))}</td><td class="value">${(p.amount || 0).toFixed(2)} دينار</td></tr>
                 `).join('');
             } else {
                 paymentContent = `
-                    <div class="row"><span>طريقة الدفع</span><span>${escapeHtml(getPaymentMethodText(invoice.payment?.method || ''))}</span></div>
-                    <div class="row"><span>المبلغ المدفوع</span><span>${(invoice.payment?.paidAmount || 0).toFixed(2)} دينار</span></div>
+                    <tr><td class="label">طريقة الدفع</td><td class="value">${escapeHtml(getPaymentMethodText(invoice.payment?.method || ''))}</td></tr>
+                    <tr><td class="label">المبلغ المدفوع</td><td class="value">${(invoice.payment?.paidAmount || 0).toFixed(2)} دينار</td></tr>
                 `;
             }
 
             return `
+            <div class="print-page">
                 <div class="header">
                     <h1>مصنع أحمد العاروري</h1>
-                    <h2>لصناعة أكسسوارات الديكور</h2>
-                    <div class="sub-title">فاتورة بيع</div>
+                    <h2>لصناعة اكسسوارات الديكور</h2>
                 </div>
+                <div class="document-title"><h3>فاتورة بيع</h3></div>
                 <div class="card">
                     <div class="info-grid">
                         <div>
-                            <div class="row"><strong>رقم الفاتورة</strong><span>${escapeHtml(invoice.id || 'فاتورة جديدة')}</span></div>
-                            <div class="row"><strong>التاريخ</strong><span>${escapeHtml(new Date(invoice.date).toLocaleDateString('ar-EG'))}</span></div>
+                            <div class="row"><span><strong>رقم الفاتورة:</strong></span><span>${escapeHtml(invoice.id || 'فاتورة جديدة')}</span></div>
+                            <div class="row"><span><strong>التاريخ:</strong></span><span>${escapeHtml(new Date(invoice.date).toLocaleDateString('ar-EG'))}</span></div>
                         </div>
                         <div>
-                            <div class="row"><strong>العميل</strong><span>${escapeHtml(invoice.client?.name || '')}</span></div>
-                            <div class="row"><strong>العنوان</strong><span>${escapeHtml(invoice.client?.address || '')}</span></div>
-                            <div class="row"><strong>الهاتف</strong><span>${escapeHtml(invoice.client?.phone || '')}</span></div>
+                            <div class="row"><span><strong>العميل:</strong></span><span>${escapeHtml(invoice.client?.name || '')}</span></div>
+                            <div class="row"><span><strong>العنوان:</strong></span><span>${escapeHtml(invoice.client?.address || '')}</span></div>
+                            <div class="row"><span><strong>الهاتف:</strong></span><span>${escapeHtml(invoice.client?.phone || '')}</span></div>
                         </div>
                     </div>
                 </div>
@@ -3803,29 +4289,38 @@ function addPayment() {
                     <table>
                         <thead>
                             <tr>
-                                <th>المنتج</th>
-                                <th>الكمية</th>
-                                <th>السعر</th>
-                                <th>المجموع</th>
+                                <th style="width:40%;">المنتج</th>
+                                <th style="text-align:center;">الكمية</th>
+                                <th style="text-align:center;">السعر</th>
+                                <th style="text-align:center;">المجموع</th>
                             </tr>
                         </thead>
                         <tbody>${productsRows}</tbody>
                     </table>
                 </div>
-                <div class="card">
-                    <div class="row"><span>المجموع الفرعي</span><span>${(invoice.subtotal || 0).toFixed(2)} دينار</span></div>
-                    <div class="row"><span>الخصم</span><span>${(invoice.totalDiscount || 0).toFixed(2)} دينار</span></div>
-                    <div class="row"><span>الضريبة</span><span>${(invoice.totalTax || 0).toFixed(2)} دينار</span></div>
-                    <div class="row total-row"><span>المجموع الكلي</span><span>${(invoice.grandTotal || 0).toFixed(2)} دينار</span></div>
-                    ${paymentContent}
-                    <div class="row"><span>المبلغ المتبقي</span><span>${(invoice.payment?.remainingBalance || 0).toFixed(2)} دينار</span></div>
-                    <div class="row"><span>الحالة</span><span>${escapeHtml(invoice.status || '')}</span></div>
+                <div class="card" style="padding: 0;">
+                    <table class="totals-table">
+                        <tbody>
+                            <tr><td class="label">المجموع الفرعي</td><td class="value">${(invoice.subtotal || 0).toFixed(2)} دينار</td></tr>
+                            <tr><td class="label">الخصم</td><td class="value">${(invoice.totalDiscount || 0).toFixed(2)} دينار</td></tr>
+                            ${paymentContent}
+                            <tr class="grand-total-row"><td class="label">المجموع الكلي</td><td class="value">${(invoice.grandTotal || 0).toFixed(2)} دينار</td></tr>
+                            <tr class="grand-total-row"><td class="label">المبلغ المتبقي</td><td class="value">${(invoice.payment?.remainingBalance || 0).toFixed(2)} دينار</td></tr>
+                        </tbody>
+                    </table>
                 </div>
-                <div class="signature">
-                    <div>توقيع العميل</div>
-                    <div>توقيع المدير</div>
+                <div class="signature-section">
+                    <div class="signature-box">
+                        توقيع المستلم
+                        <div class="signature-line"></div>
+                    </div>
+                    <div class="signature-box">
+                        توقيع الإدارة
+                        <div class="signature-line"></div>
+                    </div>
                 </div>
-                <div class="footer">تمت الطباعة من نظام إدارة المصنع</div>
+                <div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>
+            </div>
             `;
         }
 
@@ -3896,6 +4391,71 @@ function addPayment() {
             updateDashboard();
         }
 
+        function exportInvoiceAsPDF(invoiceId) {
+            const { jsPDF } = window.jspdf;
+            const invoice = invoices.find(inv => inv.id === invoiceId);
+            if (!invoice) {
+                showNotification('لم يتم العثور على الفاتورة', 'error');
+                return;
+            }
+
+            showNotification('جاري تجهيز ملف PDF...', 'success');
+
+            // 1. إنشاء حاوية مؤقتة للطباعة
+            const printContainer = document.createElement('div');
+            printContainer.style.position = 'absolute';
+            printContainer.style.left = '-9999px';
+            document.body.appendChild(printContainer);
+
+            // 2. الحصول على محتوى الطباعة الاحترافي
+            const bodyHtml = buildInvoicePrintBody(invoice);
+            printContainer.innerHTML = bodyHtml;
+            const invoiceElement = printContainer.querySelector('.print-page');
+
+            // 3. استخدام html2canvas لالتقاط العنصر
+            html2canvas(invoiceElement, {
+                scale: 2, // تحسين الدقة
+                useCORS: true,
+                logging: false
+            }).then(canvas => {
+                // 4. إنشاء ملف PDF
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const ratio = canvasWidth / canvasHeight;
+                
+                let imgWidth = pdfWidth;
+                let imgHeight = imgWidth / ratio;
+
+                if (imgHeight > pdfHeight) {
+                    imgHeight = pdfHeight;
+                    imgWidth = imgHeight * ratio;
+                }
+
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                
+                // 5. حفظ ملف PDF
+                pdf.save(`فاتورة-${invoice.id}.pdf`);
+
+                // 6. تنظيف
+                document.body.removeChild(printContainer);
+                showNotification('تم تحميل الفاتورة كملف PDF بنجاح.');
+
+            }).catch(err => {
+                console.error("خطأ في إنشاء PDF:", err);
+                showNotification('حدث خطأ أثناء إنشاء ملف PDF', 'error');
+                document.body.removeChild(printContainer);
+            });
+        }
+
         function searchPurchaseHistory() {
             const searchTerm = document.getElementById('purchase-client-search').value;
             
@@ -3959,8 +4519,18 @@ function addPayment() {
         
         function deletePurchaseEntry(purchaseId) {
             if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return;
+            
             purchaseHistory = purchaseHistory.filter(p => p.id !== purchaseId);
             localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+
+            try {
+                sendToCloud({ action: 'deletePurchase', purchaseId: purchaseId });
+                showNotification('تم حذف سجل الشراء بنجاح.');
+            } catch (err) {
+                console.error('فشل حذف سجل الشراء من السحابة:', err);
+                showNotification('تم الحذف محلياً، لكن فشلت المزامنة السحابية', 'error');
+            }
+
             loadPurchaseHistory();
             loadSteelThicknessPurchases();
             loadProductSalesTotals();
@@ -4131,42 +4701,49 @@ function addPayment() {
             const netSalary = Number(salary.netSalary ?? (basicSalary + overtime - deductions));
 
             return `
+            <div class="print-page">
                 <div class="header">
                     <h1>مصنع أحمد العاروري</h1>
-                    <h2>لصناعة أكسسوارات الديكور</h2>
-                    <div class="sub-title">كشف راتب الموظف</div>
+                    <h2>لصناعة اكسسوارات الديكور</h2>
                 </div>
+                <div class="document-title"><h3>كشف راتب الموظف</h3></div>
                 <div class="card">
                     <div class="info-grid">
                         <div>
-                            <div class="row"><strong>اسم الموظف</strong><span>${escapeHtml(salary.employeeName || 'غير محدد')}</span></div>
-                            <div class="row"><strong>رقم الهوية</strong><span>${escapeHtml(salary.employeeId || 'غير محدد')}</span></div>
+                            <div class="row"><span><strong>اسم الموظف:</strong></span><span>${escapeHtml(salary.employeeName || 'غير محدد')}</span></div>
+                            <div class="row"><span><strong>رقم الهوية:</strong></span><span>${escapeHtml(salary.employeeId || 'غير محدد')}</span></div>
                         </div>
                         <div>
-                            <div class="row"><strong>المسمى الوظيفي</strong><span>${escapeHtml(salary.employeePosition || 'غير محدد')}</span></div>
-                            <div class="row"><strong>الشهر</strong><span>${escapeHtml(`${monthLabel} ${salary.year || new Date().getFullYear()}`)}</span></div>
-                            <div class="row"><strong>تاريخ الطباعة</strong><span>${escapeHtml(new Date().toLocaleDateString('ar-EG'))}</span></div>
+                            <div class="row"><span><strong>المسمى الوظيفي:</strong></span><span>${escapeHtml(salary.employeePosition || 'غير محدد')}</span></div>
+                            <div class="row"><span><strong>الشهر:</strong></span><span>${escapeHtml(`${monthLabel} ${salary.year || new Date().getFullYear()}`)}</span></div>
                         </div>
                     </div>
                 </div>
                 <div class="card">
-                    <table>
+                    <table class="totals-table">
                         <thead>
                             <tr><th>البند</th><th>المبلغ (دينار)</th></tr>
                         </thead>
                         <tbody>
-                            <tr><td>الراتب الأساسي</td><td>${basicSalary.toFixed(2)}</td></tr>
-                            <tr><td>الإضافي</td><td>${overtime.toFixed(2)}</td></tr>
-                            <tr><td>الخصومات</td><td>${deductions.toFixed(2)}</td></tr>
-                            <tr class="total-row"><td><strong>صافي الراتب</strong></td><td><strong>${netSalary.toFixed(2)}</strong></td></tr>
+                            <tr><td class="label">الراتب الأساسي</td><td class="value">${basicSalary.toFixed(2)}</td></tr>
+                            <tr><td class="label">الإضافي</td><td class="value">${overtime.toFixed(2)}</td></tr>
+                            <tr><td class="label">الخصومات</td><td class="value">${deductions.toFixed(2)}</td></tr>
+                            <tr class="grand-total-row"><td class="label">صافي الراتب</td><td class="value">${netSalary.toFixed(2)}</td></tr>
                         </tbody>
                     </table>
                 </div>
-                <div class="signature">
-                    <div>توقيع الموظف</div>
-                    <div>توقيع المدير</div>
+                <div class="signature-section">
+                    <div class="signature-box">
+                        توقيع الموظف
+                        <div class="signature-line"></div>
+                    </div>
+                    <div class="signature-box">
+                        توقيع الإدارة
+                        <div class="signature-line"></div>
+                    </div>
                 </div>
-                <div class="footer">تمت الطباعة من نظام إدارة المصنع</div>
+                <div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>
+            </div>
             `;
         }
 
@@ -4341,14 +4918,22 @@ function addPayment() {
             openProfessionalPrintWindow(`كشف راتب - ${salary.employeeName}`, bodyHtml);
         }
         
-        function deleteSalary(salaryId) {
+        async function deleteSalary(salaryId) {
             if (!confirm('هل أنت متأكد من حذف كشف الراتب هذا؟')) {
                 return;
             }
             
             employeeSalaries = employeeSalaries.filter(s => s.id !== salaryId);
             localStorage.setItem('employeeSalaries', JSON.stringify(employeeSalaries));
-            showNotification('تم حذف كشف الراتب');
+
+            try {
+                await sendToCloud({ action: 'deleteSalary', salaryId: salaryId });
+                showNotification('تم حذف كشف الراتب بنجاح');
+            } catch (err) {
+                console.error('فشل حذف كشف الراتب من السحابة:', err);
+                showNotification('تم الحذف محلياً، لكن فشلت المزامنة السحابية', 'error');
+            }
+            
             loadEmployeeSalaries();
         }
         
@@ -4686,32 +5271,124 @@ function addPayment() {
             }
         }
         
-        function printReport(reportType) {
+        function buildReportPrintBody(reportType) {
             const reportTitle = getReportTitle(reportType);
-            
-            let reportContent = '';
-            if (reportType === 'daily') {
-                reportContent = document.getElementById('daily-report').innerHTML;
-            } else if (reportType === 'weekly') {
-                reportContent = document.getElementById('weekly-report').innerHTML;
-            } else if (reportType === 'monthly') {
-                reportContent = document.getElementById('monthly-report').innerHTML;
-            } else if (reportType === 'annual') {
-                reportContent = document.getElementById('annual-report').innerHTML;
+            let summaryCardsHTML = '';
+            let detailsTableHTML = '';
+
+            const reportContentEl = document.getElementById(`${reportType}-report`);
+            if (reportContentEl) {
+                // Build summary cards
+                const summaryCards = reportContentEl.querySelectorAll('.summary-card, .annual-card');
+                if (summaryCards.length > 0) {
+                    summaryCardsHTML += '<div class="report-summary">';
+                    summaryCards.forEach(card => {
+                        const title = card.querySelector('h4')?.textContent || '';
+                        const value = card.querySelector('.value')?.textContent || '';
+                        const subValue = card.querySelector('.sub-value')?.textContent || '';
+                        summaryCardsHTML += `
+                            <div class="summary-card">
+                                <h4>${escapeHtml(title)}</h4>
+                                <div class="value">${escapeHtml(value)}</div>
+                                ${subValue ? `<div class="sub-value">${escapeHtml(subValue)}</div>` : ''}
+                            </div>
+                        `;
+                    });
+                    summaryCardsHTML += '</div>';
+                }
+
+                // Re-filter invoices to get all data, not just paginated
+                let invoicesList = [];
+                const today = new Date();
+                if (reportType === 'daily') {
+                    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                    invoicesList = invoices.filter(invoice => new Date(invoice.date) >= todayStart && new Date(invoice.date) < todayEnd);
+                } else if (reportType === 'weekly') {
+                    const startOfWeek = new Date(today);
+                    startOfWeek.setDate(today.getDate() - today.getDay());
+                    startOfWeek.setHours(0, 0, 0, 0);
+                    const endOfWeek = new Date(startOfWeek);
+                    endOfWeek.setDate(startOfWeek.getDate() + 7);
+                    invoicesList = invoices.filter(invoice => new Date(invoice.date) >= startOfWeek && new Date(invoice.date) < endOfWeek);
+                } else if (reportType === 'monthly') {
+                    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                    invoicesList = invoices.filter(invoice => new Date(invoice.date) >= startOfMonth && new Date(invoice.date) <= endOfMonth);
+                } else if (reportType === 'annual') {
+                    const currentYear = today.getFullYear();
+                    const startOfYear = new Date(currentYear, 0, 1);
+                    const endOfYear = new Date(currentYear, 11, 31);
+                    invoicesList = invoices.filter(invoice => new Date(invoice.date) >= startOfYear && new Date(invoice.date) <= endOfYear);
+                }
+
+                if (invoicesList.length > 0) {
+                     detailsTableHTML = `
+                        <div class="sales-details">
+                            <h4>تفاصيل المبيعات</h4>
+                            <table class="sales-details-table">
+                                <thead>
+                                    <tr>
+                                        <th>رقم الفاتورة</th><th>التاريخ</th><th>العميل</th><th>المنتج</th>
+                                        <th>الكمية</th><th>السعر</th><th>المجموع</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    invoicesList.forEach(invoice => {
+                        invoice.products.forEach(product => {
+                            detailsTableHTML += `
+                                <tr>
+                                    <td>${escapeHtml(invoice.id)}</td>
+                                    <td>${new Date(invoice.date).toLocaleDateString('ar-EG')}</td>
+                                    <td>${escapeHtml(invoice.client.name)}</td>
+                                    <td>${escapeHtml(product.productName)} ${product.thickness ? `(${product.thickness} مم)` : ''}</td>
+                                    <td style="text-align:center;">${product.quantity}</td>
+                                    <td style="text-align:center;">${product.price.toFixed(2)}</td>
+                                    <td style="text-align:center;">${product.total.toFixed(2)}</td>
+                                </tr>
+                            `;
+                        });
+                    });
+                    detailsTableHTML += '</tbody></table></div>';
+                }
+                
+                const monthlyChart = reportContentEl.querySelector('.monthly-chart');
+                if (reportType === 'annual' && monthlyChart) {
+                    let chartHTML = '<h4>ملخص المبيعات الشهرية</h4><table><thead><tr><th>الشهر</th><th>إجمالي المبيعات</th></tr></thead><tbody>';
+                    const monthBars = monthlyChart.querySelectorAll('.month-bar');
+                    monthBars.forEach(bar => {
+                        const monthName = bar.querySelector('.month-name').textContent;
+                        const monthValue = bar.querySelector('.month-value').textContent;
+                        chartHTML += `<tr><td>${monthName}</td><td>${monthValue}</td></tr>`;
+                    });
+                    chartHTML += '</tbody></table>';
+                    detailsTableHTML = chartHTML + detailsTableHTML;
+                }
             }
-            
+
             const bodyHtml = `
+            <div class="print-page">
                 <div class="header">
                     <h1>مصنع أحمد العاروري</h1>
-                    <h2>لصناعة أكسسوارات الديكور</h2>
-                    <div class="sub-title">${escapeHtml(reportTitle)}</div>
-                    <div class="sub-title">تاريخ الطباعة: ${escapeHtml(new Date().toLocaleDateString('ar-EG'))}</div>
+                    <h2>لصناعة اكسسوارات الديكور</h2>
+                </div>
+                <div class="document-title"><h3>${escapeHtml(reportTitle)}</h3></div>
+                <div class="card">
+                    ${summaryCardsHTML}
                 </div>
                 <div class="card">
-                    ${reportContent}
+                    ${detailsTableHTML || '<p>لا توجد بيانات لعرضها في هذه الفترة.</p>'}
                 </div>
-                <div class="footer">تمت الطباعة من نظام إدارة المصنع</div>
+                <div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>
+            </div>
             `;
+            return bodyHtml;
+        }
+
+        function printReport(reportType) {
+            const reportTitle = getReportTitle(reportType);
+            const bodyHtml = buildReportPrintBody(reportType);
             openProfessionalPrintWindow(reportTitle, bodyHtml);
         }
         
@@ -4725,7 +5402,187 @@ function addPayment() {
             }
         }
         
+        function printElementContent(elementId, title) {
+            const element = document.getElementById(elementId);
+            if (!element) {
+                showNotification('العنصر المراد طباعته غير موجود', 'error');
+                return;
+            }
+
+            const contentHtml = element.innerHTML;
+            
+            const bodyHtml = `
+            <div class="print-page">
+                <div class="header">
+                    <h1>مصنع أحمد العاروري</h1>
+                    <h2>لصناعة اكسسوارات الديكور</h2>
+                </div>
+                <div class="document-title"><h3>${escapeHtml(title)}</h3></div>
+                <div class="card">
+                    ${contentHtml}
+                </div>
+                <div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>
+            </div>
+            `;
+
+            openProfessionalPrintWindow(title, bodyHtml);
+        }
+
+        // ==========================================
+        // د) دوال دفتر الذمم
+        // ==========================================
+
+        function loadLedger() {
+            const debtorsListContainer = document.getElementById('debtors-list-container');
+            const totalBalanceSpan = document.getElementById('total-debtors-balance');
+
+            const debtors = clients.filter(c => c.balance > 0);
+
+            if (debtors.length === 0) {
+                debtorsListContainer.innerHTML = '<div class="client-item">لا يوجد عملاء عليهم ذمم حالياً.</div>';
+                totalBalanceSpan.textContent = '0.00';
+                return;
+            }
+
+            // Sort by highest balance
+            debtors.sort((a, b) => b.balance - a.balance);
+
+            let totalDebt = 0;
+            let listHtml = '';
+
+            debtors.forEach(client => {
+                totalDebt += client.balance;
+                listHtml += `
+                    <div class="client-item">
+                        <div><strong>${escapeHtml(client.name)}</strong></div>
+                        <div>الهاتف: ${escapeHtml(client.phone || 'غير متوفر')}</div>
+                        <div class="client-financial-info balance-negative" style="font-size: 1.1em;">
+                            الرصيد المستحق: ${client.balance.toFixed(2)} دينار
+                        </div>
+                        <div style="display: flex; gap: 5px; margin-top: 10px;">
+                            <button class="btn btn-info financial-record" data-client-name="${escapeHtml(client.name)}">
+                                <i class="fas fa-file-invoice-dollar"></i> عرض السجل المالي
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            debtorsListContainer.innerHTML = listHtml;
+            totalBalanceSpan.textContent = totalDebt.toFixed(2);
+
+            // Add event listeners to the newly created buttons
+            debtorsListContainer.querySelectorAll('.financial-record').forEach(button => {
+                button.addEventListener('click', function() {
+                    const clientName = this.getAttribute('data-client-name');
+                    viewFinancialLedger(clientName);
+                });
+            });
+        }
+
+        async function addLedgerEntry() {
+            const clientName = document.getElementById('ledger-client-search').value.trim();
+            const amount = parseFloat(document.getElementById('ledger-amount').value);
+            const reason = document.getElementById('ledger-reason').value.trim();
+
+            if (!clientName) {
+                showNotification('يجب اختيار عميل', 'error');
+                return;
+            }
+            if (isNaN(amount) || amount === 0) {
+                showNotification('يجب إدخال مبلغ صحيح (غير صفري)', 'error');
+                return;
+            }
+            if (!reason) {
+                showNotification('يجب إدخال السبب أو البيان', 'error');
+                return;
+            }
+
+            const client = clients.find(c => c.name === clientName);
+            if (!client) {
+                showNotification('العميل غير موجود في السجلات', 'error');
+                return;
+            }
+
+            if (!Array.isArray(client.adjustments)) {
+                client.adjustments = [];
+            }
+
+            client.adjustments.push({
+                date: new Date().toISOString(),
+                amount: amount,
+                reason: reason
+            });
+
+            client.balance = (client.balance || 0) + amount;
+            localStorage.setItem('clients', JSON.stringify(clients));
+
+            try {
+                await sendToCloud({ action: 'saveClient', client: client });
+                showNotification('تم حفظ الإدخال ومزامنة البيانات بنجاح');
+            } catch (err) {
+                console.error('فشل مزامنة إدخال الذمة:', err);
+                showNotification('تم الحفظ محلياً، ولكن فشلت المزامنة السحابية', 'error');
+            }
+
+            loadLedger();
+            loadClientsList();
+            updateDashboard();
+
+            document.getElementById('ledger-client-search').value = '';
+            document.getElementById('ledger-amount').value = '';
+            document.getElementById('ledger-reason').value = '';
+        }
+
+        function printDebtorsList() {
+            const debtors = clients.filter(c => c.balance > 0).sort((a, b) => b.balance - a.balance);
+            if (debtors.length === 0) {
+                showNotification('لا يوجد بيانات لطباعتها', 'error');
+                return;
+            }
+            let totalDebt = 0;
+            const rows = debtors.map(client => {
+                totalDebt += client.balance;
+                return `<tr><td>${escapeHtml(client.name)}</td><td>${escapeHtml(client.phone || '-')}</td><td style="text-align:center; font-weight: bold;">${client.balance.toFixed(2)}</td></tr>`;
+            }).join('');
+            const tableHtml = `<table><thead><tr><th>اسم العميل</th><th>الهاتف</th><th style="text-align:center;">المبلغ المستحق (دينار)</th></tr></thead><tbody>${rows}</tbody><tfoot><tr class="grand-total-row"><td colspan="2" style="text-align: right;"><strong>الإجمالي</strong></td><td style="text-align:center;"><strong>${totalDebt.toFixed(2)}</strong></td></tr></tfoot></table>`;
+            const bodyHtml = `<div class="print-page"><div class="header"><h1>مصنع أحمد العاروري</h1><h2>لصناعة اكسسوارات الديكور</h2></div><div class="document-title"><h3>قائمة الذمم على العملاء</h3></div><div class="card">${tableHtml}</div><div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div></div>`;
+            openProfessionalPrintWindow('قائمة الذمم على العملاء', bodyHtml);
+        }
+
+        document.getElementById('closeLedger').addEventListener('click', function() {
+            document.getElementById('ledgerModal').style.display = 'none';
+        });
+
+        document.getElementById('printLedger').addEventListener('click', function() {
+            const clientName = document.getElementById('ledger-client-name').querySelector('strong').textContent;
+            const ledgerContent = document.getElementById('ledger-content').innerHTML;
+            const finalBalance = document.getElementById('ledger-client-name').querySelector('div').innerHTML;
+
+            // إزالة الأنماط المضمنة للحصول على طباعة احترافية
+            const cleanLedgerContent = ledgerContent.replace(/style="[^"]*"/g, '');
+
+            const printBody = `
+                <div class="header">
+                    <div class="header-logo">
+                        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCAxMjAgNjAiPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNjAiIGZpbGw9IiNlYWVhZWEiLz48dGV4dCB4PSI2MCIgeT0iMzUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjYWFhIj7igJzYp9mEINi52YHZiiDZhNmE2KfYrNin2Ko8L3RleHQ+PC9zdmc+" alt="شعار المصنع">
+                    </div>
+                    <div class="header-text">
+                        <h1>مصنع أحمد العاروري</h1>
+                        <h2>كشف حساب العميل: ${escapeHtml(clientName)}</h2>
+                        <div class="sub-title">تاريخ الطباعة: ${escapeHtml(new Date().toLocaleDateString('ar-EG'))}</div>
+                    </div>
+                </div>
+                <div class="card">${cleanLedgerContent}</div>
+                <div class="card" style="text-align: center; font-size: 16px; margin-top: 20px;">${finalBalance}</div>
+                <div class="footer">تمت الطباعة من نظام إدارة المصنع</div>
+            `;
+
+            openProfessionalPrintWindow(`كشف حساب - ${clientName}`, printBody);
+        });
         // ------------------- ربط الأحداث -------------------
+        document.getElementById('print-thickness-summary').addEventListener('click', () => printElementContent('steel-thickness-purchases', 'ملخص المشتريات حسب السماكة'));
+        document.getElementById('print-products-summary').addEventListener('click', () => printElementContent('product-sales-totals', 'ملخص المبيعات حسب المنتج'));
         document.getElementById('update-date-btn').addEventListener('click', updateDatesFromInput);
         document.getElementById('add-product').addEventListener('click', addProductRow);
         document.getElementById('calculate-totals').addEventListener('click', function() {
@@ -4838,6 +5695,26 @@ function addPayment() {
         document.getElementById('cancel-payment').addEventListener('click', function() {
             document.getElementById('payment-form').style.display = 'none';
         });
+        document.getElementById('payment-method-select').addEventListener('change', function() {
+            const checkFields = document.getElementById('client-payment-check-fields');
+            if (this.value === 'check') {
+                checkFields.style.display = 'grid';
+            } else {
+                checkFields.style.display = 'none';
+            }
+        });
+        document.getElementById('client-check-image').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    const preview = document.getElementById('client-check-preview');
+                    preview.src = ev.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
         document.getElementById('show-payment-form').addEventListener('click', function() {
             document.getElementById('payment-form').style.display = 'block';
         });
@@ -4867,6 +5744,26 @@ function addPayment() {
         document.getElementById('print-weekly-report').addEventListener('click', () => printReport('weekly'));
         document.getElementById('print-monthly-report').addEventListener('click', () => printReport('monthly'));
         document.getElementById('print-annual-report').addEventListener('click', () => printReport('annual'));
+        document.getElementById('add-ledger-entry').addEventListener('click', addLedgerEntry);
+        document.getElementById('print-debtors-list').addEventListener('click', printDebtorsList);
+        document.getElementById('ledger-client-search').addEventListener('input', function() {
+            const searchTerm = this.value;
+            const listElement = document.getElementById('ledger-client-autocomplete-list');
+            listElement.innerHTML = '';
+            if (searchTerm.length < 1) return;
+            const filteredClients = clients.filter(client =>
+                client.name.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            filteredClients.forEach(client => {
+                const item = document.createElement('div');
+                item.textContent = client.name;
+                item.addEventListener('click', function() {
+                    document.getElementById('ledger-client-search').value = client.name;
+                    listElement.innerHTML = '';
+                });
+                listElement.appendChild(item);
+            });
+        });
         
         // إعداد التبويبات
         document.querySelectorAll('.tab').forEach(tab => {
@@ -4889,6 +5786,8 @@ function addPayment() {
                     setupCalculator();
                 } else if (this.getAttribute('data-tab') === 'reports') {
                     loadReports();
+                } else if (this.getAttribute('data-tab') === 'ledger') {
+                    loadLedger();
                 }
                 
                 updateDashboard();
