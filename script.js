@@ -36,7 +36,7 @@ function normalizeCloudData(data) {
         return {
             clients: Array.isArray(data.clients) ? data.clients : [],
             invoices: Array.isArray(data.invoices) ? data.invoices : [],
-            purchaseHistory: Array.isArray(data.purchaseHistory) ? data.purchaseHistory : [], // This is derived, but good to have a fallback
+            purchaseHistory: Array.isArray(data.purchaseHistory) ? data.purchaseHistory : [],
             employeeSalaries: Array.isArray(data.employeeSalaries) ? data.employeeSalaries : [],
             weeklyInventoryEntries: Array.isArray(data.weeklyInventoryEntries) ? data.weeklyInventoryEntries : [],
             products: Array.isArray(data.products) ? data.products : []
@@ -305,9 +305,7 @@ function loadProducts() {
 async function saveProducts() {
     localStorage.setItem('products', JSON.stringify(products));
     try {
-        // The new Apps Script expects the whole list
         await sendToCloud({ action: 'saveProducts', products: products });
-        // No need for a success message here as it's a background sync
     } catch (err) {
         showNotification('فشلت مزامنة قائمة المنتجات.', 'error');
     }
@@ -424,10 +422,6 @@ function addProductRow() {
     
     tbody.appendChild(row);
     
-    function updateSpanFromInput(input, span) {
-        span.textContent = input.value;
-    }
-    
     thickInput.addEventListener('input', function() {
         thickSpan.textContent = this.value;
         calculateRowTotal(row);
@@ -533,7 +527,6 @@ function populateProductEditorList(filter = '') {
         typeCell.style.fontWeight = product.isSteel ? 'bold' : 'normal';
         typeCell.style.color = product.isSteel ? '#27ae60' : '#7f8c8d';
 
-
         [widthCell, lengthCell, typeCell].forEach(cell => cell.style.textAlign = 'center');
 
         const actionsCell = row.insertCell(4);
@@ -632,21 +625,27 @@ function renumberRows() {
 function calculateTotals() {
     let subtotal = 0, totalDiscount = 0, totalTax = 0, grandTotal = 0;
     const rows = document.querySelectorAll('#products-body tr');
+    
     rows.forEach(row => {
         calculateRowTotal(row);
         const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
         const price = parseFloat(row.querySelector('.price').value) || 0;
         const discount = parseFloat(row.querySelector('.discount').value) || 0;
+        
         const rowSubtotal = price * quantity;
         const discountAmount = (rowSubtotal * discount) / 100;
         const priceAfterDiscount = rowSubtotal - discountAmount;
+        
+        // --- التعديل المالي: حساب الضريبة 16% وإضافتها للمجموع (Tax Exclusive) ---
         const taxRate = 16;
-        const taxAmount = (priceAfterDiscount * taxRate) / (100 + taxRate);
+        const taxAmount = priceAfterDiscount * (taxRate / 100);
+        
         subtotal += rowSubtotal;
         totalDiscount += discountAmount;
         totalTax += taxAmount;
-        grandTotal += priceAfterDiscount;
+        grandTotal += (priceAfterDiscount + taxAmount);
     });
+    
     document.getElementById('subtotal').textContent = subtotal.toFixed(2);
     document.getElementById('total-discount').textContent = totalDiscount.toFixed(2);
     document.getElementById('total-tax').textContent = totalTax.toFixed(2);
@@ -675,7 +674,7 @@ function updatePaymentBalance() {
     }
 }
 
-document.querySelectorAll('input[name="payment-method"]').forEach(radio => { // تعديل: إضافة منطق التعامل مع الذمم
+document.querySelectorAll('input[name="payment-method"]').forEach(radio => {
     radio.addEventListener('change', function() {
         document.getElementById('check-fields-single').style.display = this.value === 'check' ? 'grid' : 'none';
         const paidAmountInput = document.getElementById('paid-amount');
@@ -703,14 +702,11 @@ document.getElementById('check-image-single').addEventListener('change', functio
 });
 
 function setupMultiplePayments() {
-    // إزالة المستمعات القديمة لتجنب التكرار
     const addBtn = document.getElementById('add-payment-method');
     if (addBtn) {
         addBtn.removeEventListener('click', addPaymentMethodHandler);
         addBtn.addEventListener('click', addPaymentMethodHandler);
     }
-
-    // إعداد الصفوف الموجودة
     document.querySelectorAll('.payment-row').forEach(row => {
         setupPaymentRow(row);
     });
@@ -901,6 +897,7 @@ async function saveInvoice() {
         client.address = clientAddress;
         client.phone = clientPhone;
     }
+    
     // تصحيح حساب الرصيد عند التعديل
     if (editingInvoiceId && editingInvoiceSnapshot) {
         const oldRemainingBalance = editingInvoiceSnapshot.payment?.remainingBalance || 0;
@@ -908,8 +905,10 @@ async function saveInvoice() {
     } else {
         client.balance = (client.balance || 0) + invoice.payment.remainingBalance;
     }
+    
     if (isNewClient) clients.push(client);
     localStorage.setItem('clients', JSON.stringify(clients));
+    
     if (editingInvoiceId) {
         invoices = invoices.filter(inv => inv.id !== editingInvoiceId);
         purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== editingInvoiceId);
@@ -980,12 +979,10 @@ function editInvoice(invoiceId) {
         document.getElementById('enable-multiple-payments').checked = true;
         document.getElementById('multiple-payments-section').style.display = 'block';
         document.getElementById('single-payment-section').style.display = 'none';
-        // إعادة بناء قسم الدفعات المتعددة
         const section = document.getElementById('multiple-payments-section');
         section.innerHTML = '';
         invoice.payment.payments.forEach(payment => {
             const row = createPaymentRow();
-            // تعبئة القيم
             const methodSelect = row.querySelector('.payment-method-select');
             methodSelect.value = payment.method;
             const amountInput = row.querySelector('.payment-amount');
@@ -1004,20 +1001,16 @@ function editInvoice(invoiceId) {
             section.appendChild(row);
             setupPaymentRow(row);
         });
-        // إضافة زر الإضافة
         const addBtn = document.createElement('button');
         addBtn.className = 'btn';
         addBtn.id = 'add-payment-method';
         addBtn.innerHTML = '<i class="fas fa-plus"></i> إضافة طريقة دفع أخرى';
         section.appendChild(addBtn);
-        // إضافة ملخص
         const summaryDiv = document.createElement('div');
         summaryDiv.className = 'payment-summary';
         summaryDiv.innerHTML = `<strong>إجمالي المدفوع:</strong> <span id="total-paid">${invoice.payment.paidAmount.toFixed(2)}</span> دينار`;
         section.appendChild(summaryDiv);
-        // ربط زر الإضافة
         addBtn.addEventListener('click', addPaymentMethodHandler);
-        // تحديث المجموع
         updateMultiplePaymentsTotal();
     } else {
         document.getElementById('enable-multiple-payments').checked = false;
@@ -1295,7 +1288,7 @@ function viewClientInvoices(clientName) {
     const clientInvoices = document.getElementById('client-invoices');
     const clientPayments = document.getElementById('client-payments');
     clientInvoicesSection.style.display = 'block';
-    document.getElementById('current-client-name').textContent = clientName; // This is inside "طلبات العميل" so it's fine
+    document.getElementById('current-client-name').textContent = clientName;
     const client = clients.find(c => c.name === clientName);
     if (client) {
         document.getElementById('current-client-balance').textContent = (client.balance || 0).toFixed(2);
@@ -1364,10 +1357,8 @@ function viewFinancialLedger(clientName) {
         transactions.push({ date: new Date(inv.date), type: 'invoice', description: `طلب بيع رقم: ${inv.id}`, debit: inv.grandTotal, credit: 0 });
     });
     clientPayments.forEach(p => {
-        transactions.push({ date: new Date(p.date), type: 'payment', description: `دفعة (${getPaymentMethodText(p.method)})`, debit: 0, credit: p.amount });
         transactions.push({ date: new Date(p.date), type: 'payment', description: `دفعة (${getPaymentMethodText(p.method)})`, debit: 0, credit: p.amount, id: p.id });
     });
-    // التصحيح: إزالة التكرار وإضافة id بشكل صحيح
     clientAdjustments.forEach((adj, index) => {
         if (!adj.id) adj.id = `adj_legacy_${index}`;
         transactions.push({
@@ -1408,12 +1399,11 @@ function viewFinancialLedger(clientName) {
 }
 
 function showAddPaymentForClient(clientName) {
-    currentViewingClient = clientName; // Set the client for the payment
+    currentViewingClient = clientName;
     const modal = document.getElementById('paymentModal');
     const title = document.getElementById('payment-modal-title');
     title.innerHTML = `إضافة دفعة للعميل: <strong>${escapeHtml(clientName)}</strong>`;
     
-    // Reset form fields
     document.getElementById('client-payment-amount-input').value = '0.00';
     document.getElementById('payment-method-select').value = 'cash';
     document.getElementById('client-payment-check-fields').style.display = 'none';
@@ -1532,11 +1522,8 @@ async function addPayment() {
         console.error('فشل مزامنة الدفعة:', err);
         showNotification('تم حفظ الدفعة محلياً، لكن فشلت المزامنة السحابية', 'error');
     }
-    // Close modal
     document.getElementById('paymentModal').style.display = 'none';
-    // Refresh the client list to show the new balance
     loadClientsList();
-    // If the detailed view for this client is open, refresh it too
     if (document.getElementById('client-invoices-section').style.display === 'block' && document.getElementById('current-client-name').textContent === currentViewingClient) {
         viewClientInvoices(currentViewingClient);
     }
@@ -1561,11 +1548,6 @@ function getPaymentMethodText(method) {
     return map[method] || method;
 }
 
-/**
- * Converts a number to its Arabic text representation.
- * @param {number} number The number to convert.
- * @returns {string} The Arabic text representation.
- */
 function numberToArabicWords(number) {
     const ones = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة'];
     const teens = ['عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
@@ -1576,9 +1558,7 @@ function numberToArabicWords(number) {
     let num = Math.floor(number);
     let remainder = Math.round((number - num) * 100);
 
-    if (num === 0) {
-        return 'صفر';
-    }
+    if (num === 0) return 'صفر';
 
     let words = [];
 
@@ -1837,7 +1817,6 @@ function getPrintStyles() {
 }
 
 function buildOfficialHeader(documentTitle) {
-    // For sales orders, the title is handled inside buildInvoicePrintBody
     if (documentTitle.trim() === 'طلب بيع') {
         return `
         <div class="header">
@@ -1849,7 +1828,6 @@ function buildOfficialHeader(documentTitle) {
         </div>
         `;
     }
-    // For other reports, keep the title in the main header
     return `
     <div class="header">
         <h1>${FACTORY_NAME}</h1>
@@ -2005,7 +1983,6 @@ function addQuoteProductRow() {
     const tbody = document.getElementById('quote-products-body');
     const row = document.createElement('tr');
     
-    // This is a simplified version of addProductRow, without print-value spans as they are not needed for a simple quote tool
     row.innerHTML = `
         <td>${quoteProductCount}</td>
         <td><select class="product-name"></select></td>
@@ -2053,7 +2030,6 @@ function addQuoteProductRow() {
 
     row.querySelector('.remove-product').addEventListener('click', () => {
         row.remove();
-        // Renumber rows
         quoteProductCount = 0;
         document.querySelectorAll('#quote-products-body tr').forEach(r => {
             quoteProductCount++;
@@ -2078,7 +2054,8 @@ function calculateQuoteTotals() {
 
     document.getElementById('quote-subtotal').textContent = subtotal.toFixed(2);
     document.getElementById('quote-total-discount').textContent = totalDiscount.toFixed(2);
-    document.getElementById('quote-grand-total').textContent = grandTotal.toFixed(2);
+    // --- التعديل المالي: منع مشاكل دقة الفواصل العشرية ---
+    document.getElementById('quote-grand-total').textContent = Number(grandTotal).toFixed(2);
 }
 
 function getCurrentQuoteFromForm() {
@@ -2296,26 +2273,42 @@ function exportCurrentInvoiceAsPDF() {
     });
 }
 
+// --- التعديل المالي الحرج: تحديث رصيد العميل عند الحذف ---
 async function deleteInvoice(invoiceId) {
     const password = prompt('يرجى إدخال كلمة المرور لحذف طلب البيع:');
     if (password !== DELETE_PASSWORD) {
         showNotification('كلمة المرور غير صحيحة', 'error');
         return;
     }
+
+    const invoiceToDelete = invoices.find(inv => inv.id === invoiceId);
+    if (invoiceToDelete) {
+        const clientIndex = clients.findIndex(c => c.name === invoiceToDelete.client.name);
+        if (clientIndex !== -1 && invoiceToDelete.payment && invoiceToDelete.payment.remainingBalance > 0) {
+            // خصم الرصيد المتبقي للفاتورة من ذمة العميل
+            clients[clientIndex].balance -= invoiceToDelete.payment.remainingBalance;
+            localStorage.setItem('clients', JSON.stringify(clients));
+            sendToCloud({ action: 'saveClient', client: clients[clientIndex] }).catch(err => console.error(err));
+        }
+    }
+
     invoices = invoices.filter(inv => inv.id !== invoiceId);
     localStorage.setItem('invoices', JSON.stringify(invoices));
     purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== invoiceId);
     localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+    
     try {
         await sendToCloud({ action: 'deleteInvoice', invoiceId: invoiceId });
         await fetchCloudData();
-        showNotification('تم حذف طلب البيع بنجاح');
+        showNotification('تم حذف طلب البيع وتحديث الأرصدة بنجاح');
     } catch (err) {
         console.error('فشل حذف طلب البيع من السحابة:', err);
-        showNotification('تم حذف طلب البيع محليًا لكن لم يتم حذفه من السحابة', 'error');
+        showNotification('تم الحذف محليًا لكن لم يتم حذفه من السحابة', 'error');
     }
+    
     loadInvoicesHistory();
     updateDashboard();
+    loadClientsList(); // تحديث لعرض الرصيد الجديد
 }
 
 function exportInvoiceAsPDF(invoiceId) {
@@ -2732,8 +2725,9 @@ function resetCalculator() {
 // =========================================
 // دوال التقارير
 // =========================================
+// --- التعديل المالي: تضمين كل طرق الدفع في سجل التحليل النقدي ---
 function calculatePaymentBreakdown(invoicesList) {
-    const totals = { cash: 0, check: 0, bank: 0 };
+    const totals = { cash: 0, check: 0, bank: 0, receivable: 0, exchange: 0 };
     invoicesList.forEach(invoice => {
         if (!invoice.payment) return;
 
@@ -2741,6 +2735,8 @@ function calculatePaymentBreakdown(invoicesList) {
             if (method === 'cash') totals.cash += amount;
             else if (method === 'check') totals.check += amount;
             else if (method === 'bank') totals.bank += amount;
+            else if (method === 'receivable') totals.receivable += amount;
+            else if (method === 'exchange') totals.exchange += amount;
         };
 
         if (invoice.payment.type === 'single') {
@@ -2969,7 +2965,7 @@ function buildReportPrintBody(reportType) {
     let summaryCardsHTML = '';
     let detailsTableHTML = '';
     const reportContentEl = document.getElementById(`${reportType}-report`);
-    let invoicesList = []; // تعريف المصفوفة مسبقاً
+    let invoicesList = []; 
 
     if (reportContentEl) {
         const summaryCards = reportContentEl.querySelectorAll('.summary-card, .annual-card');
@@ -3042,10 +3038,6 @@ function printReport(reportType) {
     openProfessionalPrintWindow(reportTitle, bodyHtml);
 }
 
-/**
- * يحسب بيانات الوزن الخام للمنتجات الحديدية المباعة.
- * @returns {{totalWeights: object, grandTotalWeight: number}}
- */
 function getOutputWeightData() {
     const STEEL_DENSITY_FACTOR = 0.000785;
     const invoices = JSON.parse(localStorage.getItem('invoices')) || [];
@@ -3213,12 +3205,11 @@ async function addLedgerEntry() {
     try {
         await sendToCloud({ action: 'saveClient', client: client });
         showNotification('تم حفظ الإدخال ومزامنة البيانات بنجاح');
-        // Ask to print receipt if it's a payment (negative amount)
-        if (amount < 0) { // It's a payment
+        if (amount < 0) { 
             const paymentForReceipt = {
                 date: new Date().toISOString(),
-                amount: -amount, // make it positive
-                method: 'manual', // Special method for ledger entry
+                amount: -amount,
+                method: 'manual', 
             };
             lastAddedPaymentInfo = { clientName: client.name, payment: paymentForReceipt };
             document.getElementById('receiptOptionsModal').style.display = 'flex';
@@ -3347,14 +3338,9 @@ function printDebtorsList() {
 // =========================================
 // دوال الجرد الأسبوعي
 // =========================================
-/**
- * Returns the start and end date of the week for a given date.
- * @param {Date} date The date to get the week for.
- * @returns {{startOfWeek: Date, endOfWeek: Date}}
- */
 function getWeekBoundaries(date) {
     const d = new Date(date);
-    const day = d.getDay(); // Sunday = 0, Saturday = 6
+    const day = d.getDay(); 
     const diffToSunday = d.getDate() - day;
     const startOfWeek = new Date(d.setDate(diffToSunday));
     startOfWeek.setHours(0, 0, 0, 0);
@@ -3403,7 +3389,7 @@ async function addInventoryEntry() {
     document.getElementById('inventory-item-quantity').value = '';
     document.getElementById('inventory-item-unit').value = '';
 
-    loadWeeklyInventorySection(); // Refresh the view
+    loadWeeklyInventorySection();
 }
 
 async function deleteInventoryEntry(entryId) {
@@ -3416,7 +3402,7 @@ async function deleteInventoryEntry(entryId) {
         } catch (err) {
             showNotification('تم حذف الحركة محلياً، لكن فشلت المزامنة', 'error');
         }
-        loadWeeklyInventorySection(); // Refresh the view
+        loadWeeklyInventorySection();
     }
 }
 
@@ -3487,13 +3473,12 @@ function printInventoryReport() {
 }
 
 function generateAndDisplayFactoryInventoryReport() {
-    const allInvoices = invoices; // All invoices
-    const allEntries = weeklyInventoryEntries; // All manual entries
+    const allInvoices = invoices; 
+    const allEntries = weeklyInventoryEntries;
 
     const outgoingIronWeight = calculateWeightFromInvoices(allInvoices);
     const inventoryData = {};
 
-    // Process all manual entries
     allEntries.forEach(entry => {
         const key = `${entry.itemName}_${entry.unit}`;
         if (!inventoryData[key]) {
@@ -3511,7 +3496,6 @@ function generateAndDisplayFactoryInventoryReport() {
         if (entry.type === 'scrap') inventoryData[key].scrap += entry.quantity;
     });
 
-    // Add outgoing iron from sales
     const ironKey = 'حديد_كجم';
     if (!inventoryData[ironKey] && outgoingIronWeight > 0) {
         inventoryData[ironKey] = { itemName: 'حديد', unit: 'كجم', opening: 0, incoming: 0, outgoing: 0, scrap: 0 };
@@ -3540,9 +3524,10 @@ function printFactoryInventoryReport() {
     openProfessionalPrintWindow(title, bodyHtml);
 }
 
+// --- التعديل المالي: ضمان دقة الأرقام العشرية قبل التفقيط ---
 function buildPaymentReceiptBody(clientName, payment) {
     const title = 'إيصال استلام مبلغ';
-    const amountInWords = numberToArabicWords(payment.amount);
+    const amountInWords = numberToArabicWords(Number(payment.amount.toFixed(2)));
 
     return `
     <div class="print-page modern-invoice">

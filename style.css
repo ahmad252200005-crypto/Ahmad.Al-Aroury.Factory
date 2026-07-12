@@ -1216,16 +1216,23 @@ input:focus, select:focus {
         background: transparent;
     }
 
-    #products-table thead {
+    #products-table thead,
+    #quote-products-table thead {
         display: none;
     }
 
-    #products-table tbody, #products-table tr, #products-table td {
+    #products-table tbody,
+    #products-table tr,
+    #products-table td,
+    #quote-products-table tbody,
+    #quote-products-table tr,
+    #quote-products-table td {
         display: block;
         width: 100%;
     }
 
-    #products-table tr {
+    #products-table tr,
+    #quote-products-table tr {
         background: #ffffff;
         border-radius: 12px;
         margin-bottom: 20px;
@@ -1238,20 +1245,23 @@ input:focus, select:focus {
         gap: 10px;
     }
 
-    #products-table td {
+    #products-table td,
+    #quote-products-table td {
         border: none;
         padding: 0;
         text-align: right;
     }
 
-    #products-table td:nth-of-type(2) {
+    #products-table td:nth-of-type(2),
+    #quote-products-table td:nth-of-type(2) {
         grid-column: 1 / -1;
         margin-bottom: 10px;
         border-bottom: 2px solid #f0f0f0;
         padding-bottom: 10px;
     }
 
-    #products-table td:nth-of-type(2) select {
+    #products-table td:nth-of-type(2) select,
+    #quote-products-table td:nth-of-type(2) select {
         font-weight: bold;
         color: #2c3e50;
         border: none;
@@ -1259,16 +1269,46 @@ input:focus, select:focus {
         font-size: 16px;
     }
 
-    #products-table td:nth-of-type(1) {
+    #products-table td:nth-of-type(1),
+    #quote-products-table td:nth-of-type(1) {
         display: none;
     }
 
-    #products-table td:nth-of-type(3)::before { content: "السماكة"; display: block; font-size: 11px; color: #888; margin-bottom: 2px;}
-    #products-table td:nth-of-type(4)::before { content: "الكمية"; display: block; font-size: 11px; color: #888; margin-bottom: 2px;}
-    #products-table td:nth-of-type(5)::before { content: "السعر"; display: block; font-size: 11px; color: #888; margin-bottom: 2px;}
-    #products-table td:nth-of-type(6)::before { content: "الخصم %"; display: block; font-size: 11px; color: #888; margin-bottom: 2px;}
+    #products-table td:nth-of-type(3)::before,
+    #quote-products-table td:nth-of-type(3)::before {
+        content: "السماكة";
+        display: block;
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 2px;
+    }
+    #products-table td:nth-of-type(4)::before,
+    #quote-products-table td:nth-of-type(4)::before {
+        content: "الكمية";
+        display: block;
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 2px;
+    }
+    #products-table td:nth-of-type(5)::before,
+    #quote-products-table td:nth-of-type(5)::before {
+        content: "السعر";
+        display: block;
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 2px;
+    }
+    #products-table td:nth-of-type(6)::before,
+    #quote-products-table td:nth-of-type(6)::before {
+        content: "الخصم %";
+        display: block;
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 2px;
+    }
 
-    #products-table input {
+    #products-table input,
+    #quote-products-table input {
         width: 100%;
         background: #f8f9fa;
         border: 1px solid #ddd;
@@ -1279,12 +1319,14 @@ input:focus, select:focus {
         font-size: 14px;
     }
 
-    #products-table input:focus {
+    #products-table input:focus,
+    #quote-products-table input:focus {
         background: #fff;
         border-color: #3498db;
     }
 
-    #products-table td:nth-of-type(7) {
+    #products-table td:nth-of-type(7),
+    #quote-products-table td:nth-of-type(7) {
         grid-column: 1 / -1;
         background: #e8f5e9;
         padding: 10px;
@@ -1298,17 +1340,20 @@ input:focus, select:focus {
         align-items: center;
     }
 
-    #products-table td:nth-of-type(7)::before {
+    #products-table td:nth-of-type(7)::before,
+    #quote-products-table td:nth-of-type(7)::before {
         content: "الإجمالي:";
         color: #333;
     }
 
-    #products-table td:nth-of-type(8) {
+    #products-table td:nth-of-type(8),
+    #quote-products-table td:nth-of-type(8) {
         grid-column: 1 / -1;
         text-align: center;
     }
     
-    #products-table .btn.remove-product {
+    #products-table .btn.remove-product,
+    #quote-products-table .btn.remove-product {
         width: 100%;
         background: #ffecb3;
         color: #d35400;
