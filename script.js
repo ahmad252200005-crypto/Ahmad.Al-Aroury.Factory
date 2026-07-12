@@ -36,8 +36,6 @@ function normalizeCloudData(data) {
         return {
             clients: Array.isArray(data.clients) ? data.clients : [],
             invoices: Array.isArray(data.invoices) ? data.invoices : [],
-            purchaseHistory: Array.isArray(data.purchaseHistory) ? data.purchaseHistory : [],
-            employeeSalaries: Array.isArray(data.employeeSalaries) ? data.employeeSalaries : []
             purchaseHistory: Array.isArray(data.purchaseHistory) ? data.purchaseHistory : [], // This is derived, but good to have a fallback
             employeeSalaries: Array.isArray(data.employeeSalaries) ? data.employeeSalaries : [],
             weeklyInventoryEntries: Array.isArray(data.weeklyInventoryEntries) ? data.weeklyInventoryEntries : [],
@@ -78,14 +76,12 @@ async function sendToCloud(payload) {
         if (normalized) {
             localStorage.setItem('clients', JSON.stringify(normalized.clients || []));
             localStorage.setItem('invoices', JSON.stringify(normalized.invoices || []));
-            localStorage.setItem('purchaseHistory', JSON.stringify(normalized.purchaseHistory || []));
             localStorage.setItem('employeeSalaries', JSON.stringify(normalized.employeeSalaries || []));
             localStorage.setItem('weeklyInventoryEntries', JSON.stringify(normalized.weeklyInventoryEntries || []));
             localStorage.setItem('products', JSON.stringify(normalized.products || []));
 
             clients = normalized.clients || clients;
             invoices = normalized.invoices || invoices;
-            purchaseHistory = normalized.purchaseHistory || purchaseHistory;
             employeeSalaries = normalized.employeeSalaries || employeeSalaries;
             weeklyInventoryEntries = normalized.weeklyInventoryEntries || weeklyInventoryEntries;
             products = normalized.products || products;
@@ -113,7 +109,6 @@ async function fetchCloudData() {
         if (normalized) {
             localStorage.setItem('clients', JSON.stringify(normalized.clients || []));
             localStorage.setItem('invoices', JSON.stringify(normalized.invoices || []));
-            localStorage.setItem('purchaseHistory', JSON.stringify(normalized.purchaseHistory || []));
             localStorage.setItem('employeeSalaries', JSON.stringify(normalized.employeeSalaries || []));
             localStorage.setItem('weeklyInventoryEntries', JSON.stringify(normalized.weeklyInventoryEntries || []));
             if (normalized.products && normalized.products.length > 0) {
@@ -122,7 +117,6 @@ async function fetchCloudData() {
 
             clients = normalized.clients || [];
             invoices = normalized.invoices || [];
-            purchaseHistory = normalized.purchaseHistory || [];
             employeeSalaries = normalized.employeeSalaries || [];
             weeklyInventoryEntries = normalized.weeklyInventoryEntries || [];
             if (normalized.products && normalized.products.length > 0) {
@@ -308,7 +302,6 @@ function loadProducts() {
     }
 }
 
-function saveProducts() {
 async function saveProducts() {
     localStorage.setItem('products', JSON.stringify(products));
     try {
@@ -576,7 +569,6 @@ function populateProductEditorList(filter = '') {
     });
 }
 
-function saveProductFromModal() {
 async function saveProductFromModal() {
     const name = document.getElementById('modal-product-name').value.trim();
     const width = parseFloat(document.getElementById('modal-product-width').value) || null;
@@ -592,7 +584,6 @@ async function saveProductFromModal() {
     } else {
         products.push({ name, width, length, isSteel });
     }
-    saveProducts();
     await saveProducts();
     showNotification('تم حفظ المنتج بنجاح', 'success');
     clearProductModalForm();
@@ -3379,7 +3370,6 @@ function saveInventoryEntries() {
     localStorage.setItem('weeklyInventoryEntries', JSON.stringify(weeklyInventoryEntries));
 }
 
-function addInventoryEntry() {
 async function addInventoryEntry() {
     const type = document.getElementById('inventory-entry-type').value;
     const itemName = document.getElementById('inventory-item-name').value.trim();
@@ -3402,7 +3392,6 @@ async function addInventoryEntry() {
 
     weeklyInventoryEntries.push(newEntry);
     saveInventoryEntries();
-    showNotification('تمت إضافة الحركة بنجاح', 'success');
     try {
         await sendToCloud({ action: 'saveInventoryEntry', entry: newEntry });
         showNotification('تمت إضافة الحركة ومزامنتها بنجاح', 'success');
@@ -3417,12 +3406,10 @@ async function addInventoryEntry() {
     loadWeeklyInventorySection(); // Refresh the view
 }
 
-function deleteInventoryEntry(entryId) {
 async function deleteInventoryEntry(entryId) {
     if (confirm('هل أنت متأكد من حذف هذه الحركة؟')) {
         weeklyInventoryEntries = weeklyInventoryEntries.filter(entry => entry.id !== entryId);
         saveInventoryEntries();
-        showNotification('تم حذف الحركة', 'success');
         try {
             await sendToCloud({ action: 'deleteInventoryEntry', entryId: entryId });
             showNotification('تم حذف الحركة ومزامنتها بنجاح', 'success');
