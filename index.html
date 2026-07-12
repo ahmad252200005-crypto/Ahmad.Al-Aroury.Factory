@@ -42,6 +42,19 @@
         </div>
     </div>
 
+    <!-- نافذة خيارات طباعة الإيصال -->
+    <div class="modal" id="receiptOptionsModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3><i class="fas fa-check-circle" style="color: #2ecc71;"></i> تم حفظ الدفعة بنجاح</h3>
+            <p>ماذا تريد أن تفعل الآن؟</p>
+            <div class="modal-actions">
+                <button class="btn btn-info" id="printReceiptOptionBtn"><i class="fas fa-print"></i> طباعة الإيصال</button>
+                <button class="btn btn-danger" id="pdfReceiptOptionBtn"><i class="fas fa-file-pdf"></i> تصدير PDF</button>
+                <button class="btn btn-secondary" id="closeReceiptOptionsModal"><i class="fas fa-times"></i> إغلاق</button>
+            </div>
+        </div>
+    </div>
+
     <!-- نافذة إضافة دفعة -->
     <div class="modal" id="paymentModal">
         <div class="modal-content" style="max-width: 600px;">
@@ -158,6 +171,8 @@
             <div class="tab" data-tab="reports"><i class="fas fa-chart-bar"></i> التقارير</div>
             <div class="tab" data-tab="ledger"><i class="fas fa-book-open"></i> دفتر الذمم</div>
             <div class="tab" data-tab="inventory"><i class="fas fa-warehouse"></i> الجرد الأسبوعي</div>
+            <div class="tab" data-tab="payments-log"><i class="fas fa-cash-register"></i> سجل الدفعات</div>
+            <div class="tab" data-tab="quote"><i class="fas fa-tags"></i> عروض الأسعار</div>
         </div>
         
         <!-- تبويب إنشاء الفاتورة -->
@@ -298,6 +313,70 @@
                 <button class="btn btn-success" id="save-invoice"><i class="fas fa-save"></i> حفظ الطلب</button>
                 <button class="btn btn-danger" id="export-current-invoice-pdf"><i class="fas fa-file-pdf"></i> تصدير PDF</button>
                 <button class="btn btn-danger" id="reset-invoice"><i class="fas fa-redo"></i> إعادة تعيين</button>
+            </div>
+        </div>
+
+        <!-- تبويب عروض الأسعار -->
+        <div class="tab-content" id="quote-tab">
+            <h1><i class="fas fa-tags"></i> إنشاء عرض سعر</h1>
+            <div class="invoice-header">
+                <div class="invoice-info">
+                    <div><strong>رقم العرض:</strong> <span id="quote-number">...</span></div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <div><strong>التاريخ الميلادي:</strong> <span id="quote-date"></span></div>
+                        <input type="date" id="quote-date-input" style="width: auto; padding: 5px;" value="">
+                        <button class="btn" id="update-quote-date-btn" style="width: auto; padding: 5px 10px;"><i class="fas fa-sync-alt"></i> تحديث التاريخ</button>
+                    </div>
+                    <div><strong>التاريخ الهجري:</strong> <span id="quote-hijri-date"></span></div>
+                </div>
+                <div class="company-info">
+                    <div><strong>المصنع:</strong> مصنع أحمد العاروري</div>
+                    <div><strong>العنوان:</strong> الأردن</div>
+                    <div><strong>الهاتف:</strong> 0795704514 - 0797083878</div>
+                </div>
+            </div>
+            
+            <div class="client-info">
+                <h3><i class="fas fa-user"></i> معلومات العميل</h3>
+                <div class="client-details">
+                    <div><strong>اسم العميل:</strong> <input type="text" id="quote-client-name" placeholder="أدخل اسم العميل"></div>
+                    <div><strong>عنوان العميل:</strong> <input type="text" id="quote-client-address" placeholder="أدخل عنوان العميل"></div>
+                    <div><strong>هاتف العميل:</strong> <input type="text" id="quote-client-phone" placeholder="أدخل هاتف العميل"></div>
+                </div>
+            </div>
+            
+            <!-- جدول المنتجات لعرض السعر -->
+            <table id="quote-products-table">
+                <thead>
+                    <tr>
+                        <th width="5%">#</th>
+                        <th width="20%">اسم المنتج</th>
+                        <th width="10%">السماكة (مم)</th>
+                        <th width="10%">الكمية</th>
+                        <th width="15%">سعر الوحدة</th>
+                        <th width="10%">الخصم (%)</th>
+                        <th width="15%">المجموع</th>
+                        <th width="10%" class="no-print">إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="quote-products-body"></tbody>
+            </table>
+            
+            <div class="actions no-print">
+                <button class="btn" id="add-quote-product"><i class="fas fa-plus"></i> إضافة منتج</button>
+                <button class="btn btn-success" id="calculate-quote-totals"><i class="fas fa-calculator"></i> حساب المجموع</button>
+            </div>
+            
+            <div class="total-section">
+                <div>المجموع الفرعي: <span id="quote-subtotal">0.00</span> دينار</div>
+                <div>إجمالي الخصم: <span id="quote-total-discount">0.00</span> دينار</div>
+                <div class="grand-total">المجموع الكلي: <span id="quote-grand-total">0.00</span> دينار</div>
+            </div>
+            
+            <div class="actions no-print">
+                <button class="btn btn-info" id="print-quote"><i class="fas fa-print"></i> طباعة عرض السعر</button>
+                <button class="btn btn-danger" id="export-current-quote-pdf"><i class="fas fa-file-pdf"></i> تصدير PDF</button>
+                <button class="btn btn-secondary" id="reset-quote"><i class="fas fa-redo"></i> إعادة تعيين</button>
             </div>
         </div>
         
@@ -589,6 +668,41 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+
+        <!-- تبويب سجل الدفعات -->
+        <div class="tab-content" id="payments-log-tab">
+            <h1><i class="fas fa-cash-register"></i> سجل الدفعات العام</h1>
+            <p>يعرض هذا القسم جميع الدفعات والتسويات المالية المسجلة في النظام.</p>
+            <div class="reports-section">
+                <h3><i class="fas fa-filter"></i> تصفية البحث</h3>
+                <div class="calculator-form" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                    <div><strong>بحث باسم العميل:</strong> <input type="text" id="payments-log-client-search" placeholder="اكتب اسم العميل..."></div>
+                    <div><strong>طريقة الدفع:</strong>
+                        <select id="payments-log-method-filter">
+                            <option value="">الكل</option>
+                            <option value="cash">كاش</option>
+                            <option value="check">شيكات</option>
+                            <option value="bank">تحويل بنكي</option>
+                            <option value="manual">تسوية يدوية</option>
+                        </select>
+                    </div>
+                    <div><strong>من تاريخ:</strong> <input type="date" id="payments-log-date-from"></div>
+                    <div><strong>إلى تاريخ:</strong> <input type="date" id="payments-log-date-to"></div>
+                </div>
+                <div class="actions" style="justify-content: flex-start; margin-top: 15px;">
+                    <button class="btn btn-success" id="apply-payments-log-filter"><i class="fas fa-search"></i> تطبيق الفلتر</button>
+                    <button class="btn btn-secondary" id="reset-payments-log-filter"><i class="fas fa-redo"></i> مسح الفلتر</button>
+                </div>
+            </div>
+            <div class="purchase-history-section" style="margin-top: 30px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+                    <h3><i class="fas fa-list-alt"></i> قائمة الدفعات</h3>
+                    <div class="actions" style="margin-top: 0;"><button class="btn btn-info" id="print-payments-log"><i class="fas fa-print"></i> طباعة القائمة</button></div>
+                </div>
+                <div id="payments-log-container"><table id="payments-log-table"><thead><tr><th>التاريخ</th><th>العميل</th><th>المبلغ</th><th>طريقة الدفع</th><th>البيان/التفاصيل</th></tr></thead><tbody id="payments-log-body"></tbody></table></div>
+                <div class="total-section" style="margin-top: 20px;"><div class="grand-total">إجمالي الدفعات المعروضة: <span id="total-payments-log-amount">0.00</span> دينار</div></div>
             </div>
         </div>
 

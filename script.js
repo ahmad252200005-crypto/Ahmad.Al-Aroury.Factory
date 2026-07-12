@@ -38,6 +38,10 @@ function normalizeCloudData(data) {
             invoices: Array.isArray(data.invoices) ? data.invoices : [],
             purchaseHistory: Array.isArray(data.purchaseHistory) ? data.purchaseHistory : [],
             employeeSalaries: Array.isArray(data.employeeSalaries) ? data.employeeSalaries : []
+            purchaseHistory: Array.isArray(data.purchaseHistory) ? data.purchaseHistory : [], // This is derived, but good to have a fallback
+            employeeSalaries: Array.isArray(data.employeeSalaries) ? data.employeeSalaries : [],
+            weeklyInventoryEntries: Array.isArray(data.weeklyInventoryEntries) ? data.weeklyInventoryEntries : [],
+            products: Array.isArray(data.products) ? data.products : []
         };
     }
     return null;
@@ -76,10 +80,15 @@ async function sendToCloud(payload) {
             localStorage.setItem('invoices', JSON.stringify(normalized.invoices || []));
             localStorage.setItem('purchaseHistory', JSON.stringify(normalized.purchaseHistory || []));
             localStorage.setItem('employeeSalaries', JSON.stringify(normalized.employeeSalaries || []));
+            localStorage.setItem('weeklyInventoryEntries', JSON.stringify(normalized.weeklyInventoryEntries || []));
+            localStorage.setItem('products', JSON.stringify(normalized.products || []));
+
             clients = normalized.clients || clients;
             invoices = normalized.invoices || invoices;
             purchaseHistory = normalized.purchaseHistory || purchaseHistory;
             employeeSalaries = normalized.employeeSalaries || employeeSalaries;
+            weeklyInventoryEntries = normalized.weeklyInventoryEntries || weeklyInventoryEntries;
+            products = normalized.products || products;
         }
         console.log("تم التحديث الفوري سحابياً!");
         return parsed || true;
@@ -106,10 +115,20 @@ async function fetchCloudData() {
             localStorage.setItem('invoices', JSON.stringify(normalized.invoices || []));
             localStorage.setItem('purchaseHistory', JSON.stringify(normalized.purchaseHistory || []));
             localStorage.setItem('employeeSalaries', JSON.stringify(normalized.employeeSalaries || []));
+            localStorage.setItem('weeklyInventoryEntries', JSON.stringify(normalized.weeklyInventoryEntries || []));
+            if (normalized.products && normalized.products.length > 0) {
+                localStorage.setItem('products', JSON.stringify(normalized.products));
+            }
+
             clients = normalized.clients || [];
             invoices = normalized.invoices || [];
             purchaseHistory = normalized.purchaseHistory || [];
             employeeSalaries = normalized.employeeSalaries || [];
+            weeklyInventoryEntries = normalized.weeklyInventoryEntries || [];
+            if (normalized.products && normalized.products.length > 0) {
+                products = normalized.products;
+            }
+
             loadClientsList();
             loadInvoicesHistory();
             loadPurchaseHistory();
@@ -198,7 +217,10 @@ let editingSalaryId = null;
 let currentSalesPage = 1;
 const salesPerPage = 10;
 let lastSyncTimestamp = 0;
+let lastAddedPaymentInfo = null;
+let allPaymentsCache = [];
 let autoRefreshTimer = null;
+let quoteProductCount = 0;
 let products = [];
 
 // =========================================
@@ -287,7 +309,15 @@ function loadProducts() {
 }
 
 function saveProducts() {
+async function saveProducts() {
     localStorage.setItem('products', JSON.stringify(products));
+    try {
+        // The new Apps Script expects the whole list
+        await sendToCloud({ action: 'saveProducts', products: products });
+        // No need for a success message here as it's a background sync
+    } catch (err) {
+        showNotification('فشلت مزامنة قائمة المنتجات.', 'error');
+    }
 }
 
 // =========================================
@@ -547,6 +577,7 @@ function populateProductEditorList(filter = '') {
 }
 
 function saveProductFromModal() {
+async function saveProductFromModal() {
     const name = document.getElementById('modal-product-name').value.trim();
     const width = parseFloat(document.getElementById('modal-product-width').value) || null;
     const isSteel = document.getElementById('modal-product-is-steel').checked;
@@ -562,6 +593,7 @@ function saveProductFromModal() {
         products.push({ name, width, length, isSteel });
     }
     saveProducts();
+    await saveProducts();
     showNotification('تم حفظ المنتج بنجاح', 'success');
     clearProductModalForm();
     populateProductEditorList(document.getElementById('modal-product-search').value);
@@ -1503,10 +1535,8 @@ async function addPayment() {
     try {
         await sendToCloud({ action: 'saveClient', client: client });
         showNotification('تم إضافة الدفعة ومزامنتها بنجاح');
-        // Ask to print receipt
-        if (confirm('هل تريد طباعة إيصال استلام؟')) {
-            printPaymentReceipt(currentViewingClient, payment);
-        }
+        lastAddedPaymentInfo = { clientName: currentViewingClient, payment: payment };
+        document.getElementById('receiptOptionsModal').style.display = 'flex';
     } catch (err) {
         console.error('فشل مزامنة الدفعة:', err);
         showNotification('تم حفظ الدفعة محلياً، لكن فشلت المزامنة السحابية', 'error');
@@ -1603,34 +1633,6 @@ function numberToArabicWords(number) {
     result += ' دينار' + (remainder > 0 ? ` و ${convertLessThanOneThousand(remainder)} قرشاً` : '') + ' فقط لا غير';
 
     return result.replace(/\s+/g, ' ').trim();
-}
-
-function printPaymentReceipt(clientName, payment) {
-    const title = 'إيصال استلام مبلغ';
-    const amountInWords = numberToArabicWords(payment.amount);
-
-    const bodyHtml = `
-    <div class="print-page modern-invoice">
-        ${buildOfficialHeader(title)}
-        <div class="card" style="margin-top: 30px; padding: 30px; font-size: 12pt; line-height: 2;">
-            <div class="info-grid" style="grid-template-columns: 1fr; gap: 20px;">
-                <div class="row"><span><strong>التاريخ:</strong></span><span>${new Date(payment.date).toLocaleDateString('ar-EG')}</span></div>
-                <div class="row"><span><strong>استلمنا من السيد/السادة:</strong></span><span>${escapeHtml(clientName)}</span></div>
-                <div class="row"><span><strong>مبلغاً وقدره:</strong></span><span style="font-weight: bold;">${escapeHtml(amountInWords)}</span></div>
-                <div class="row"><span><strong>وذلك عن طريق:</strong></span><span>${escapeHtml(getPaymentMethodText(payment.method))}</span></div>
-                ${payment.method === 'check' && payment.checkDetails ? `
-                <div class="row">
-                    <span><strong>تفاصيل الشيك:</strong></span>
-                    <span>رقم ${escapeHtml(payment.checkDetails.checkNumber)} تاريخ ${escapeHtml(payment.checkDetails.checkDate)}</span>
-                </div>
-                ` : ''}
-            </div>
-        </div>
-        <div class="signature-section" style="margin-top: 80px;"><div class="signature-box">المستلم<div class="signature-line"></div></div></div>
-        <div class="print-footer"><p>هذا الإيصال بمثابة سند قبض للمبلغ المذكور أعلاه.</p></div>
-    </div>
-    `;
-    openProfessionalPrintWindow(title, bodyHtml);
 }
 
 // =========================================
@@ -1968,6 +1970,242 @@ function buildInvoicePrintBody(invoice) {
 function printInvoiceRecord(invoice) {
     const bodyHtml = buildInvoicePrintBody(invoice);
     openProfessionalPrintWindow(`طلب بيع ${invoice.id}`, bodyHtml);
+}
+
+// =========================================
+// دوال عروض الأسعار
+// =========================================
+
+function setupQuoteTab() {
+    resetQuoteForm();
+}
+
+function resetQuoteForm() {
+    document.getElementById('quote-products-body').innerHTML = '';
+    document.getElementById('quote-client-name').value = '';
+    document.getElementById('quote-client-address').value = '';
+    document.getElementById('quote-client-phone').value = '';
+    document.getElementById('quote-subtotal').textContent = '0.00';
+    document.getElementById('quote-total-discount').textContent = '0.00';
+    document.getElementById('quote-grand-total').textContent = '0.00';
+    quoteProductCount = 0;
+    addQuoteProductRow();
+    
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    document.getElementById('quote-date-input').value = `${year}-${month}-${day}`;
+    updateQuoteDatesFromInput();
+}
+
+function updateQuoteDatesFromInput() {
+    const dateInput = document.getElementById('quote-date-input').value;
+    const quoteNumberSpan = document.getElementById('quote-number');
+    const date = dateInput ? new Date(dateInput + 'T12:00:00') : new Date();
+    
+    document.getElementById('quote-date').textContent = date.toLocaleDateString('en-US');
+    document.getElementById('quote-hijri-date').textContent = getHijriDateFromDate(date);
+    quoteNumberSpan.textContent = `Q-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}-${String(Date.now()).slice(-4)}`;
+}
+
+function addQuoteProductRow() {
+    quoteProductCount++;
+    const tbody = document.getElementById('quote-products-body');
+    const row = document.createElement('tr');
+    
+    // This is a simplified version of addProductRow, without print-value spans as they are not needed for a simple quote tool
+    row.innerHTML = `
+        <td>${quoteProductCount}</td>
+        <td><select class="product-name"></select></td>
+        <td><input type="number" class="thickness" value="0" min="0" step="0.1"></td>
+        <td><input type="number" class="quantity" value="1" min="1"></td>
+        <td><input type="number" class="price" value="0.00" min="0" step="0.01"></td>
+        <td><input type="number" class="discount" value="0" min="0" max="100"></td>
+        <td class="total">0.00</td>
+        <td class="no-print"><button class="btn btn-danger remove-product"><i class="fas fa-trash"></i></button></td>
+    `;
+
+    const select = row.querySelector('.product-name');
+    let options = '<option value="">اختر منتج</option>';
+    products.sort((a, b) => a.name.localeCompare(b.name, 'ar')).forEach(product => {
+        const widthText = product.width ? ` (${product.width} سم)` : '';
+        options += `<option value="${escapeHtml(product.name)}">${escapeHtml(product.name)}${widthText}</option>`;
+    });
+    options += '<option value="--add-new--" style="font-weight:bold; background-color:#e8f5e9;">+ إضافة أو تعديل منتج...</option>';
+    select.innerHTML = options;
+
+    tbody.appendChild(row);
+
+    const calculateAndRefresh = () => {
+        const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+        const price = parseFloat(row.querySelector('.price').value) || 0;
+        const discount = parseFloat(row.querySelector('.discount').value) || 0;
+        const discountAmount = (price * discount) / 100;
+        const priceAfterDiscount = price - discountAmount;
+        const total = priceAfterDiscount * quantity;
+        row.querySelector('.total').textContent = total.toFixed(2);
+        calculateQuoteTotals();
+    };
+
+    row.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', calculateAndRefresh);
+        input.addEventListener('focus', function() { this.select(); });
+    });
+
+    select.addEventListener('change', function() {
+        if (this.value === '--add-new--') {
+            openProductModal();
+            this.value = '';
+        }
+    });
+
+    row.querySelector('.remove-product').addEventListener('click', () => {
+        row.remove();
+        // Renumber rows
+        quoteProductCount = 0;
+        document.querySelectorAll('#quote-products-body tr').forEach(r => {
+            quoteProductCount++;
+            r.cells[0].textContent = quoteProductCount;
+        });
+        calculateQuoteTotals();
+    });
+}
+
+function calculateQuoteTotals() {
+    let subtotal = 0, totalDiscount = 0;
+    document.querySelectorAll('#quote-products-body tr').forEach(row => {
+        const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+        const price = parseFloat(row.querySelector('.price').value) || 0;
+        const discount = parseFloat(row.querySelector('.discount').value) || 0;
+        const rowSubtotal = price * quantity;
+        const discountAmount = (rowSubtotal * discount) / 100;
+        subtotal += rowSubtotal;
+        totalDiscount += discountAmount;
+    });
+    const grandTotal = subtotal - totalDiscount;
+
+    document.getElementById('quote-subtotal').textContent = subtotal.toFixed(2);
+    document.getElementById('quote-total-discount').textContent = totalDiscount.toFixed(2);
+    document.getElementById('quote-grand-total').textContent = grandTotal.toFixed(2);
+}
+
+function getCurrentQuoteFromForm() {
+    return {
+        id: document.getElementById('quote-number').textContent,
+        date: new Date(document.getElementById('quote-date-input').value + 'T12:00:00').toISOString(),
+        client: {
+            name: document.getElementById('quote-client-name').value || '',
+            address: document.getElementById('quote-client-address').value || '',
+            phone: document.getElementById('quote-client-phone').value || ''
+        },
+        products: Array.from(document.querySelectorAll('#quote-products-body tr')).map(row => ({
+            productName: row.querySelector('.product-name')?.value || '',
+            thickness: row.querySelector('.thickness')?.value || 0,
+            quantity: parseFloat(row.querySelector('.quantity')?.value) || 0,
+            price: parseFloat(row.querySelector('.price')?.value) || 0,
+            total: parseFloat(row.querySelector('.total')?.textContent) || 0
+        })).filter(item => item.productName),
+        subtotal: parseFloat(document.getElementById('quote-subtotal').textContent) || 0,
+        totalDiscount: parseFloat(document.getElementById('quote-total-discount').textContent) || 0,
+        grandTotal: parseFloat(document.getElementById('quote-grand-total').textContent) || 0,
+    };
+}
+
+function buildQuotePrintBody(quote) {
+    const productsRows = (quote.products || []).map(product => `
+        <tr>
+            <td>${escapeHtml(product.productName || '')}</td>
+            <td style="text-align:center;">${(product.quantity || 0).toFixed(2)}</td>
+            <td style="text-align:center;">${(product.price || 0).toFixed(2)}</td>
+            <td style="text-align:center;">${(product.total || 0).toFixed(2)}</td>
+        </tr>`).join('');
+
+    return `
+    <div class="print-page modern-invoice">
+        ${buildOfficialHeader('عرض سعر')}
+        <div class="invoice-meta">
+            <div>
+                <strong>إلى:</strong> ${escapeHtml(quote.client?.name || '')}<br>
+                <strong>العنوان:</strong> ${escapeHtml(quote.client?.address || 'غير محدد')}<br>
+                <strong>الهاتف:</strong> ${escapeHtml(quote.client?.phone || 'غير محدد')}
+            </div>
+            <div style="text-align: left;">
+                <h3 class="document-title-print">عرض سعر</h3>
+                <strong>رقم العرض:</strong> ${escapeHtml(quote.id)}<br>
+                <strong>تاريخ العرض:</strong> ${escapeHtml(new Date(quote.date).toLocaleDateString('ar-EG'))}<br>
+            </div>
+        </div>
+        <div class="invoice-body">
+            <div class="invoice-main">
+                <table><thead><tr><th style="width:40%;">المنتج</th><th style="text-align:center;">الكمية</th><th style="text-align:center;">السعر</th><th style="text-align:center;">المجموع</th></tr></thead><tbody>${productsRows}</tbody></table>
+            </div>
+            <div class="invoice-aside">
+                <div class="totals-card">
+                    <h3>ملخص عرض السعر</h3>
+                    <div class="totals-row"><span>المجموع الفرعي</span><span>${(quote.subtotal || 0).toFixed(2)} دينار</span></div>
+                    <div class="totals-row"><span>الخصم</span><span>${(quote.totalDiscount || 0).toFixed(2)} دينار</span></div>
+                    <div class="totals-row grand-total"><span>المجموع الكلي</span><span>${(quote.grandTotal || 0).toFixed(2)} دينار</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="print-footer">
+            <p>هذا عرض سعر صالح لمدة 7 أيام من تاريخه.</p>
+            <p>هذا المستند صدر من نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</p>
+        </div>
+    </div>`;
+}
+
+function printCurrentQuote() {
+    const quote = getCurrentQuoteFromForm();
+    if (!quote.client.name || quote.products.length === 0) {
+        showNotification('يرجى تعبئة بيانات عرض السعر أولاً (العميل والمنتجات)', 'error');
+        return;
+    }
+    const bodyHtml = buildQuotePrintBody(quote);
+    openProfessionalPrintWindow(`عرض سعر ${quote.id}`, bodyHtml);
+}
+
+function exportQuoteAsPDF() {
+    const quote = getCurrentQuoteFromForm();
+    if (!quote.client.name || quote.products.length === 0) {
+        showNotification('يرجى تعبئة بيانات عرض السعر أولاً (العميل والمنتجات)', 'error');
+        return;
+    }
+    showNotification('جاري تجهيز ملف PDF...', 'success');
+    const printContainer = document.createElement('div');
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    document.body.appendChild(printContainer);
+    const bodyHtml = buildQuotePrintBody(quote);
+    printContainer.innerHTML = `<style>${getPrintStyles()}</style>${bodyHtml}`;
+    const quoteElement = printContainer.querySelector('.print-page');
+    html2canvas(quoteElement, { scale: 3, useCORS: true, logging: false }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const PDF_MARGIN = 15;
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const printableWidth = pdfWidth - (PDF_MARGIN * 2);
+        const printableHeight = pdfHeight - (PDF_MARGIN * 2);
+        const ratio = canvas.width / canvas.height;
+        let imgWidth = printableWidth;
+        let imgHeight = imgWidth / ratio;
+        if (imgHeight > printableHeight) {
+            imgHeight = printableHeight;
+            imgWidth = imgHeight * ratio;
+        }
+        const xOffset = PDF_MARGIN + (printableWidth - imgWidth) / 2;
+        const yOffset = PDF_MARGIN + (printableHeight - imgHeight) / 2;
+        pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
+        pdf.save(`عرض-سعر-${quote.id}.pdf`);
+        document.body.removeChild(printContainer);
+        showNotification('تم تحميل عرض السعر كملف PDF بنجاح.');
+    }).catch(err => {
+        console.error("خطأ في إنشاء PDF:", err);
+        showNotification('حدث خطأ أثناء إنشاء ملف PDF', 'error');
+        document.body.removeChild(printContainer);
+    });
 }
 
 function getCurrentInvoiceFromForm() {
@@ -2985,16 +3223,14 @@ async function addLedgerEntry() {
         await sendToCloud({ action: 'saveClient', client: client });
         showNotification('تم حفظ الإدخال ومزامنة البيانات بنجاح');
         // Ask to print receipt if it's a payment (negative amount)
-        if (amount < 0) {
-            if (confirm('هل تريد طباعة إيصال استلام للمبلغ المسدد؟')) {
-                const paymentForReceipt = {
-                    date: new Date().toISOString(),
-                    amount: -amount, // make it positive
-                    method: 'manual', // Special method for ledger entry
-                    checkDetails: null
-                };
-                printPaymentReceipt(client.name, paymentForReceipt);
-            }
+        if (amount < 0) { // It's a payment
+            const paymentForReceipt = {
+                date: new Date().toISOString(),
+                amount: -amount, // make it positive
+                method: 'manual', // Special method for ledger entry
+            };
+            lastAddedPaymentInfo = { clientName: client.name, payment: paymentForReceipt };
+            document.getElementById('receiptOptionsModal').style.display = 'flex';
         }
     } catch (err) {
         console.error('فشل مزامنة إدخال الذمة:', err);
@@ -3144,6 +3380,7 @@ function saveInventoryEntries() {
 }
 
 function addInventoryEntry() {
+async function addInventoryEntry() {
     const type = document.getElementById('inventory-entry-type').value;
     const itemName = document.getElementById('inventory-item-name').value.trim();
     const quantity = parseFloat(document.getElementById('inventory-item-quantity').value);
@@ -3166,6 +3403,12 @@ function addInventoryEntry() {
     weeklyInventoryEntries.push(newEntry);
     saveInventoryEntries();
     showNotification('تمت إضافة الحركة بنجاح', 'success');
+    try {
+        await sendToCloud({ action: 'saveInventoryEntry', entry: newEntry });
+        showNotification('تمت إضافة الحركة ومزامنتها بنجاح', 'success');
+    } catch (err) {
+        showNotification('تمت إضافة الحركة محلياً، لكن فشلت المزامنة', 'error');
+    }
     
     document.getElementById('inventory-item-name').value = '';
     document.getElementById('inventory-item-quantity').value = '';
@@ -3175,10 +3418,17 @@ function addInventoryEntry() {
 }
 
 function deleteInventoryEntry(entryId) {
+async function deleteInventoryEntry(entryId) {
     if (confirm('هل أنت متأكد من حذف هذه الحركة؟')) {
         weeklyInventoryEntries = weeklyInventoryEntries.filter(entry => entry.id !== entryId);
         saveInventoryEntries();
         showNotification('تم حذف الحركة', 'success');
+        try {
+            await sendToCloud({ action: 'deleteInventoryEntry', entryId: entryId });
+            showNotification('تم حذف الحركة ومزامنتها بنجاح', 'success');
+        } catch (err) {
+            showNotification('تم حذف الحركة محلياً، لكن فشلت المزامنة', 'error');
+        }
         loadWeeklyInventorySection(); // Refresh the view
     }
 }
@@ -3300,6 +3550,187 @@ function printFactoryInventoryReport() {
     const reportContainer = document.getElementById('factory-inventory-report-container').innerHTML;
     const title = `الجرد النهائي للمصنع`;
     const bodyHtml = `<div class="print-page modern-invoice">${buildOfficialHeader(title)}<div class="card">${reportContainer}</div><div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div></div>`;
+    openProfessionalPrintWindow(title, bodyHtml);
+}
+
+function buildPaymentReceiptBody(clientName, payment) {
+    const title = 'إيصال استلام مبلغ';
+    const amountInWords = numberToArabicWords(payment.amount);
+
+    return `
+    <div class="print-page modern-invoice">
+        ${buildOfficialHeader(title)}
+        <div class="card" style="margin-top: 30px; padding: 30px; font-size: 12pt; line-height: 2;">
+            <div class="info-grid" style="grid-template-columns: 1fr; gap: 20px;">
+                <div class="row"><span><strong>التاريخ:</strong></span><span>${new Date(payment.date).toLocaleDateString('ar-EG')}</span></div>
+                <div class="row"><span><strong>استلمنا من السيد/السادة:</strong></span><span>${escapeHtml(clientName)}</span></div>
+                <div class="row"><span><strong>مبلغاً وقدره:</strong></span><span style="font-weight: bold;">${escapeHtml(amountInWords)}</span></div>
+                <div class="row"><span><strong>وذلك عن طريق:</strong></span><span>${escapeHtml(getPaymentMethodText(payment.method))}</span></div>
+                ${payment.method === 'check' && payment.checkDetails ? `
+                <div class="row">
+                    <span><strong>تفاصيل الشيك:</strong></span>
+                    <span>رقم ${escapeHtml(payment.checkDetails.checkNumber)} تاريخ ${escapeHtml(payment.checkDetails.checkDate)}</span>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+        <div class="signature-section" style="margin-top: 80px;"><div class="signature-box">المستلم<div class="signature-line"></div></div></div>
+        <div class="print-footer"><p>هذا الإيصال بمثابة سند قبض للمبلغ المذكور أعلاه.</p></div>
+    </div>
+    `;
+}
+
+function printPaymentReceipt(clientName, payment) {
+    const title = 'إيصال استلام مبلغ';
+    const bodyHtml = buildPaymentReceiptBody(clientName, payment);
+    openProfessionalPrintWindow(title, bodyHtml);
+}
+
+function exportPaymentReceiptAsPDF(clientName, payment) {
+    const { jsPDF } = window.jspdf;
+    showNotification('جاري تجهيز ملف PDF للإيصال...', 'success');
+
+    const printContainer = document.createElement('div');
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    document.body.appendChild(printContainer);
+
+    const bodyHtml = buildPaymentReceiptBody(clientName, payment);
+    printContainer.innerHTML = `<style>${getPrintStyles()}</style>${bodyHtml}`;
+    
+    const receiptElement = printContainer.querySelector('.print-page');
+    
+    html2canvas(receiptElement, { scale: 3, useCORS: true, logging: false }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        
+        const PDF_MARGIN = 15;
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const printableWidth = pdfWidth - (PDF_MARGIN * 2);
+        const printableHeight = pdfHeight - (PDF_MARGIN * 2);
+        
+        const ratio = canvas.width / canvas.height;
+        let imgWidth = printableWidth;
+        let imgHeight = imgWidth / ratio;
+        
+        if (imgHeight > printableHeight) {
+            imgHeight = printableHeight;
+            imgWidth = imgHeight * ratio;
+        }
+        
+        const xOffset = PDF_MARGIN + (printableWidth - imgWidth) / 2;
+        const yOffset = PDF_MARGIN + (printableHeight - imgHeight) / 2;
+        
+        pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
+        pdf.save(`إيصال-استلام-${clientName}-${new Date(payment.date).toLocaleDateString('en-CA')}.pdf`);
+        
+        document.body.removeChild(printContainer);
+        showNotification('تم تحميل الإيصال كملف PDF بنجاح.');
+    }).catch(err => {
+        console.error("خطأ في إنشاء PDF للإيصال:", err);
+        showNotification('حدث خطأ أثناء إنشاء ملف PDF', 'error');
+        document.body.removeChild(printContainer);
+    });
+}
+
+function getAllPayments() {
+    const allPayments = [];
+    clients.forEach(client => {
+        if (client.payments && Array.isArray(client.payments)) {
+            client.payments.forEach(p => {
+                allPayments.push({
+                    clientName: client.name,
+                    date: p.date,
+                    amount: p.amount,
+                    method: p.method,
+                    details: p.method === 'check' && p.checkDetails ? `شيك رقم: ${p.checkDetails.checkNumber}` : 'دفعة عادية'
+                });
+            });
+        }
+        if (client.adjustments && Array.isArray(client.adjustments)) {
+            client.adjustments.forEach(adj => {
+                if (adj.amount < 0) {
+                    allPayments.push({
+                        clientName: client.name,
+                        date: adj.date,
+                        amount: -adj.amount,
+                        method: 'manual',
+                        details: adj.reason || 'تسوية يدوية'
+                    });
+                }
+            });
+        }
+    });
+    allPayments.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return allPayments;
+}
+
+function displayAllPayments(filteredPayments) {
+    const tbody = document.getElementById('payments-log-body');
+    const totalAmountEl = document.getElementById('total-payments-log-amount');
+    tbody.innerHTML = '';
+    if (filteredPayments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">لا توجد دفعات مطابقة لمعايير البحث.</td></tr>';
+        totalAmountEl.textContent = '0.00';
+        return;
+    }
+    let totalAmount = 0;
+    filteredPayments.forEach(p => {
+        totalAmount += p.amount;
+        const row = tbody.insertRow();
+        row.innerHTML = `<td>${new Date(p.date).toLocaleDateString('ar-EG')}</td><td>${escapeHtml(p.clientName)}</td><td>${p.amount.toFixed(2)}</td><td>${getPaymentMethodText(p.method)}</td><td>${escapeHtml(p.details)}</td>`;
+    });
+    totalAmountEl.textContent = totalAmount.toFixed(2);
+}
+
+function loadPaymentsLog() {
+    allPaymentsCache = getAllPayments();
+    displayAllPayments(allPaymentsCache);
+    document.getElementById('payments-log-client-search').value = '';
+    document.getElementById('payments-log-method-filter').value = '';
+    document.getElementById('payments-log-date-from').value = '';
+    document.getElementById('payments-log-date-to').value = '';
+}
+
+function applyPaymentsLogFilter() {
+    const clientSearch = document.getElementById('payments-log-client-search').value.toLowerCase();
+    const methodFilter = document.getElementById('payments-log-method-filter').value;
+    const dateFrom = document.getElementById('payments-log-date-from').value;
+    const dateTo = document.getElementById('payments-log-date-to').value;
+    let filtered = allPaymentsCache;
+    if (clientSearch) {
+        filtered = filtered.filter(p => p.clientName.toLowerCase().includes(clientSearch));
+    }
+    if (methodFilter) {
+        filtered = filtered.filter(p => p.method === methodFilter);
+    }
+    if (dateFrom) {
+        const from = new Date(dateFrom);
+        from.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(p => new Date(p.date) >= from);
+    }
+    if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(p => new Date(p.date) <= to);
+    }
+    displayAllPayments(filtered);
+}
+
+function printPaymentsLog() {
+    const tableContainer = document.getElementById('payments-log-container').innerHTML;
+    const totalAmount = document.getElementById('total-payments-log-amount').textContent;
+    const title = 'سجل الدفعات العام';
+    const bodyHtml = `
+    <div class="print-page modern-invoice">
+        ${buildOfficialHeader(title)}
+        <div class="card">${tableContainer}</div>
+        <div class="card" style="text-align: center; font-size: 16px; margin-top: 20px;">
+            <strong>إجمالي الدفعات المعروضة: ${totalAmount} دينار</strong>
+        </div>
+        <div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>
+    </div>`;
     openProfessionalPrintWindow(title, bodyHtml);
 }
 
@@ -3446,6 +3877,15 @@ document.getElementById('print-debtors-list').addEventListener('click', printDeb
 document.getElementById('add-inventory-entry').addEventListener('click', addInventoryEntry);
 document.getElementById('print-inventory-report').addEventListener('click', printInventoryReport);
 document.getElementById('print-factory-inventory-report').addEventListener('click', printFactoryInventoryReport);
+document.getElementById('apply-payments-log-filter').addEventListener('click', applyPaymentsLogFilter);
+document.getElementById('reset-payments-log-filter').addEventListener('click', loadPaymentsLog);
+document.getElementById('print-payments-log').addEventListener('click', printPaymentsLog);
+document.getElementById('update-quote-date-btn').addEventListener('click', updateQuoteDatesFromInput);
+document.getElementById('add-quote-product').addEventListener('click', addQuoteProductRow);
+document.getElementById('calculate-quote-totals').addEventListener('click', calculateQuoteTotals);
+document.getElementById('print-quote').addEventListener('click', printCurrentQuote);
+document.getElementById('export-current-quote-pdf').addEventListener('click', exportQuoteAsPDF);
+document.getElementById('reset-quote').addEventListener('click', resetQuoteForm);
 document.getElementById('ledger-client-search').addEventListener('input', function() {
     const searchTerm = this.value;
     if (searchTerm.length < 1) {
@@ -3473,6 +3913,21 @@ document.getElementById('save-product-modal').addEventListener('click', saveProd
 document.getElementById('cancel-product-modal').addEventListener('click', closeProductModal);
 document.getElementById('clear-product-modal-form').addEventListener('click', clearProductModalForm);
 document.getElementById('modal-product-search').addEventListener('input', function() { populateProductEditorList(this.value); });
+document.getElementById('printReceiptOptionBtn').addEventListener('click', function() {
+    if (lastAddedPaymentInfo) {
+        printPaymentReceipt(lastAddedPaymentInfo.clientName, lastAddedPaymentInfo.payment);
+    }
+    document.getElementById('receiptOptionsModal').style.display = 'none';
+});
+document.getElementById('pdfReceiptOptionBtn').addEventListener('click', function() {
+    if (lastAddedPaymentInfo) {
+        exportPaymentReceiptAsPDF(lastAddedPaymentInfo.clientName, lastAddedPaymentInfo.payment);
+    }
+    document.getElementById('receiptOptionsModal').style.display = 'none';
+});
+document.getElementById('closeReceiptOptionsModal').addEventListener('click', function() {
+    document.getElementById('receiptOptionsModal').style.display = 'none';
+});
 
 document.getElementById('printLedger').addEventListener('click', function() {
     const clientName = document.getElementById('ledger-client-name').querySelector('strong').textContent;
@@ -3505,6 +3960,8 @@ document.querySelectorAll('.tab').forEach(tab => {
         else if (this.getAttribute('data-tab') === 'reports') { loadReports(); fetchCloudReports(); }
         else if (this.getAttribute('data-tab') === 'ledger') loadLedger();
         else if (this.getAttribute('data-tab') === 'inventory') loadWeeklyInventorySection();
+        else if (this.getAttribute('data-tab') === 'payments-log') loadPaymentsLog();
+        else if (this.getAttribute('data-tab') === 'quote') setupQuoteTab();
         updateDashboard();
     });
 });
