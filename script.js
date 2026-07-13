@@ -1,6 +1,23 @@
-// =========================================
-// رابط Google Apps Script (قابل للتعديل)
-// =========================================
+// ============================================================
+// نظام إدارة المصنع المتكامل - الإصدار 3.0 (المعدل مالياً)
+// ============================================================
+// تم إجراء التعديلات المالية التالية:
+// 1. ربط الدفعات بالفواتير عبر معرفات الفواتير في كائن الدفعة.
+// 2. توزيع الدفعات على أقدم الفواتير غير المدفوعة.
+// 3. تصحيح رصيد العميل عند حذف الفاتورة (إعادة الدفعات المرتبطة).
+// 4. نقل الدفعات المرتبطة عند تعديل الفاتورة (حتى لو تغير اسم العميل).
+// 5. إعادة حساب الأرصدة بشكل صحيح بناءً على الفواتير والتسويات.
+// 6. عرض الدفعات المرتبطة بكل فاتورة في تفاصيل العميل.
+// 7. تقارير مالية متقدمة: دفعات مرتبطة، تحليل الذمم، كشف حساب تفصيلي.
+// ============================================================
+
+// ============================================================
+// 1. الثوابت والإعدادات العامة
+// ============================================================
+
+/**
+ * رابط Google Apps Script (قابل للتعديل عبر URL أو localStorage)
+ */
 const GOOGLE_SCRIPT_URL = new URLSearchParams(window.location.search).get('api') ||
     localStorage.getItem('cloudApiUrl') ||
     "https://script.google.com/macros/s/AKfycbw3wTv2fM9cX-_GvhT3yoYf1r8OJ6rGtF7qwcmZG7qkMOw8mHWQvwFzvGr-EKArU64N/exec";
@@ -8,16 +25,27 @@ const GOOGLE_SCRIPT_URL = new URLSearchParams(window.location.search).get('api')
 const FACTORY_NAME = "مصنع أحمد العاروري لصناعة اكسسوارات الديكور";
 const FACTORY_ADDRESS = "الاردن الزرقاء الرصيفه مقابل حجز السيارات";
 const FACTORY_PHONE = "0795704514 - 0797083878";
-const FACTORY_TAX_ID = "101010101"; // رقم وهمي
-const FACTORY_CR_ID = "202020202"; // رقم وهمي
+const FACTORY_TAX_ID = "101010101";
+const FACTORY_CR_ID = "202020202";
 
-// =========================================
-// دوال مساعدة للربط السحابي
-// =========================================
+// كلمات المرور
+const DELETE_PASSWORD = "12345678";
+const PRODUCT_EDIT_PASSWORD = "2522005";
+
+// ============================================================
+// 2. دوال مساعدة عامة
+// ============================================================
+
+/**
+ * التحقق مما إذا كانت الصفحة مفتوحة محلياً (بروتوكول file:)
+ */
 function isFileProtocol() {
     return window.location.protocol === 'file:';
 }
 
+/**
+ * تحليل نص JSON بأمان
+ */
 function safeParseJson(text) {
     if (!text) return null;
     try {
@@ -27,6 +55,9 @@ function safeParseJson(text) {
     }
 }
 
+/**
+ * تطبيع البيانات المسترجعة من السحابة
+ */
 function normalizeCloudData(data) {
     if (!data) return null;
     if (Array.isArray(data)) {
@@ -45,9 +76,155 @@ function normalizeCloudData(data) {
     return null;
 }
 
-// =========================================
-// دوال الربط السحابي (POST / GET)
-// =========================================
+/**
+ * تنسيق الأرقام إلى منزلتين عشريتين
+ */
+function formatCurrency(amount) {
+    return Number(amount).toFixed(2);
+}
+
+/**
+ * تحويل النص إلى HTML آمن
+ */
+function escapeHtml(value) {
+    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/**
+ * الحصول على اسم طريقة الدفع بالعربية
+ */
+function getPaymentMethodText(method) {
+    const map = {
+        'cash': 'كاش',
+        'check': 'شيكات',
+        'exchange': 'تبديل بضائع',
+        'bank': 'تحويل بنكي',
+        'receivable': 'ذمم',
+        'manual': 'تسوية يدوية'
+    };
+    return map[method] || method;
+}
+
+/**
+ * تحويل الأرقام إلى كلمات عربية (لتفقيط المبالغ)
+ */
+function numberToArabicWords(number) {
+    const ones = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة'];
+    const teens = ['عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
+    const tens = ['', 'عشرة', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
+    const hundreds = ['', 'مائة', 'مئتان', 'ثلاثمائة', 'أربعمائة', 'خمسمائة', 'ستمائة', 'سبعمائة', 'ثمانمائة', 'تسعمائة'];
+
+    let num = Math.floor(number);
+    let remainder = Math.round((number - num) * 100);
+
+    if (num === 0) return 'صفر';
+
+    let words = [];
+
+    function convertLessThanOneThousand(n) {
+        let tempWords = [];
+        if (n >= 100) {
+            tempWords.push(hundreds[Math.floor(n / 100)]);
+            n %= 100;
+        }
+        if (n > 0) {
+            if (tempWords.length > 0) tempWords.push('و');
+            if (n >= 10 && n < 20) {
+                tempWords.push(teens[n - 10]);
+            } else {
+                if (n >= 20) {
+                    tempWords.push(tens[Math.floor(n / 10)]);
+                    if (n % 10 > 0) tempWords.push('و');
+                    n %= 10;
+                }
+                if (n > 0) {
+                    tempWords.push(ones[n]);
+                }
+            }
+        }
+        return tempWords.join(' ');
+    }
+
+    if (num >= 1000) {
+        const thousandPart = Math.floor(num / 1000);
+        if (thousandPart === 1) words.push('ألف');
+        else if (thousandPart === 2) words.push('ألفان');
+        else if (thousandPart >= 3 && thousandPart <= 10) words.push(convertLessThanOneThousand(thousandPart) + ' آلاف');
+        else words.push(convertLessThanOneThousand(thousandPart) + ' ألف');
+        num %= 1000;
+    }
+
+    if (num > 0) {
+        if (words.length > 0) words.push('و');
+        words.push(convertLessThanOneThousand(num));
+    }
+
+    let result = words.join(' ');
+    result += ' دينار' + (remainder > 0 ? ` و ${convertLessThanOneThousand(remainder)} قرشاً` : '') + ' فقط لا غير';
+    return result.replace(/\s+/g, ' ').trim();
+}
+
+// ============================================================
+// 3. دوال التاريخ والتقويم
+// ============================================================
+
+/**
+ * تعيين التاريخ الافتراضي في نموذج الفاتورة
+ */
+function setDefaultDates() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    document.getElementById('invoice-date-input').value = `${year}-${month}-${day}`;
+    updateDatesFromInput();
+}
+
+/**
+ * تحديث التواريخ (ميلادي وهجري) من المدخل
+ */
+function updateDatesFromInput() {
+    const dateInput = document.getElementById('invoice-date-input').value;
+    if (dateInput) {
+        const selectedDate = new Date(dateInput + 'T12:00:00');
+        document.getElementById('invoice-date').textContent = selectedDate.toLocaleDateString('en-US');
+        document.getElementById('hijri-date').textContent = getHijriDateFromDate(selectedDate);
+    } else {
+        const today = new Date();
+        document.getElementById('invoice-date').textContent = today.toLocaleDateString('en-US');
+        document.getElementById('hijri-date').textContent = getHijriDateFromDate(today);
+    }
+}
+
+/**
+ * تحويل التاريخ الميلادي إلى هجري
+ */
+function getHijriDateFromDate(date) {
+    try {
+        return new Intl.DateTimeFormat('ar-TN-u-ca-islamic', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        }).format(date);
+    } catch (e) {
+        return 'غير متاح';
+    }
+}
+
+/**
+ * الحصول على التاريخ الهجري الحالي
+ */
+function getHijriDate() {
+    return getHijriDateFromDate(new Date());
+}
+
+// ============================================================
+// 4. دوال الربط السحابي (POST / GET)
+// ============================================================
+
+/**
+ * إرسال البيانات إلى السحابة
+ */
 async function sendToCloud(payload) {
     if (isFileProtocol()) {
         console.warn("تم تخطي الربط السحابي لأن الصفحة مفتوحة من ملف محلي.");
@@ -94,6 +271,9 @@ async function sendToCloud(payload) {
     }
 }
 
+/**
+ * جلب البيانات من السحابة
+ */
 async function fetchCloudData() {
     if (isFileProtocol()) return;
     try {
@@ -135,9 +315,9 @@ async function fetchCloudData() {
     }
 }
 
-// =========================================
-// اختبار الاتصال السحابي
-// =========================================
+/**
+ * اختبار الاتصال بالسحابة
+ */
 window.testCloudConnection = async function() {
     try {
         const response = await fetch(GOOGLE_SCRIPT_URL, {
@@ -160,9 +340,9 @@ window.testCloudConnection = async function() {
     }
 };
 
-// =========================================
-// جلب التقارير السحابية
-// =========================================
+/**
+ * جلب التقارير السحابية
+ */
 async function fetchCloudReports() {
     if (isFileProtocol()) {
         console.warn("تم تخطي جلب التقارير السحابية لأن الصفحة مفتوحة من ملف محلي.");
@@ -188,15 +368,10 @@ async function fetchCloudReports() {
     }
 }
 
-// =========================================
-// كلمة المرور
-// =========================================
-const DELETE_PASSWORD = "12345678";
-const PRODUCT_EDIT_PASSWORD = "2522005";
+// ============================================================
+// 5. المتغيرات العامة للنظام
+// ============================================================
 
-// =========================================
-// متغيرات النظام
-// =========================================
 let productCount = 0;
 let clients = JSON.parse(localStorage.getItem('clients')) || [];
 let invoices = JSON.parse(localStorage.getItem('invoices')) || [];
@@ -217,60 +392,29 @@ let autoRefreshTimer = null;
 let quoteProductCount = 0;
 let products = [];
 
-// =========================================
-// دوال التاريخ
-// =========================================
-function setDefaultDates() {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    document.getElementById('invoice-date-input').value = `${year}-${month}-${day}`;
-    updateDatesFromInput();
-}
+// ============================================================
+// 6. دوال إدارة المنتجات (الأساسية)
+// ============================================================
 
-function updateDatesFromInput() {
-    const dateInput = document.getElementById('invoice-date-input').value;
-    if (dateInput) {
-        const selectedDate = new Date(dateInput + 'T12:00:00');
-        document.getElementById('invoice-date').textContent = selectedDate.toLocaleDateString('en-US');
-        document.getElementById('hijri-date').textContent = getHijriDateFromDate(selectedDate);
-    } else {
-        const today = new Date();
-        document.getElementById('invoice-date').textContent = today.toLocaleDateString('en-US');
-        document.getElementById('hijri-date').textContent = getHijriDateFromDate(today);
-    }
-}
-
-function getHijriDateFromDate(date) {
-    try {
-        return new Intl.DateTimeFormat('ar-TN-u-ca-islamic', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-        }).format(date);
-    } catch (e) {
-        return 'غير متاح';
-    }
-}
-
-function getHijriDate() {
-    return getHijriDateFromDate(new Date());
-}
-
-// =========================================
-// دوال إدارة المنتجات
-// =========================================
+/**
+ * تهيئة المنتجات الافتراضية
+ */
 function initializeDefaultProducts() {
     const defaultProducts = [
-        { name: "زاوية", width: 4.15, length: 300, isSteel: true }, { name: "زوايا", width: 4.15, length: 300, isSteel: true },
+        { name: "زاوية", width: 4.15, length: 300, isSteel: true },
+        { name: "زوايا", width: 4.15, length: 300, isSteel: true },
         { name: "تركات", width: null, length: null, isSteel: false },
-        { name: "امقاا", width: 9, length: 300, isSteel: true }, { name: "امقا", width: 9, length: 300, isSteel: true },
-        { name: "سي شانل", width: 5.7, length: 300, isSteel: true }, { name: "سي شانل ٥.٧", width: 5.7, length: 300, isSteel: true },
-        { name: "سي شانل 5.7", width: 5.7, length: 300, isSteel: true }, { name: "سي شانل ٥.٨", width: 5.8, length: 300, isSteel: true },
+        { name: "امقاا", width: 9, length: 300, isSteel: true },
+        { name: "امقا", width: 9, length: 300, isSteel: true },
+        { name: "سي شانل", width: 5.7, length: 300, isSteel: true },
+        { name: "سي شانل ٥.٧", width: 5.7, length: 300, isSteel: true },
+        { name: "سي شانل 5.7", width: 5.7, length: 300, isSteel: true },
+        { name: "سي شانل ٥.٨", width: 5.8, length: 300, isSteel: true },
         { name: "سي شانل 5.8", width: 5.8, length: 300, isSteel: true },
-        { name: "ستاد", width: 12, length: 300, isSteel: true }, { name: "ستاد ١٢", width: 12, length: 300, isSteel: true },
-        { name: "ستاد 12", width: 12, length: 300, isSteel: true }, { name: "ستاد ١٢.٢", width: 12.2, length: 300, isSteel: true },
+        { name: "ستاد", width: 12, length: 300, isSteel: true },
+        { name: "ستاد ١٢", width: 12, length: 300, isSteel: true },
+        { name: "ستاد 12", width: 12, length: 300, isSteel: true },
+        { name: "ستاد ١٢.٢", width: 12.2, length: 300, isSteel: true },
         { name: "ستاد 12.2", width: 12.2, length: 300, isSteel: true },
         { name: "زاويه الظل", width: null, length: null, isSteel: false },
         { name: "ألواح جبسمبورد أبيض", width: null, length: null, isSteel: false },
@@ -287,6 +431,9 @@ function initializeDefaultProducts() {
     return Array.from(productMap.values());
 }
 
+/**
+ * تحميل المنتجات من localStorage
+ */
 function loadProducts() {
     try {
         const storedProducts = JSON.parse(localStorage.getItem('products'));
@@ -302,6 +449,9 @@ function loadProducts() {
     }
 }
 
+/**
+ * حفظ المنتجات في localStorage ومزامنتها مع السحابة
+ */
 async function saveProducts() {
     localStorage.setItem('products', JSON.stringify(products));
     try {
@@ -311,18 +461,22 @@ async function saveProducts() {
     }
 }
 
-// =========================================
-// دوال إدارة المنتجات في الفاتورة
-// =========================================
+// ============================================================
+// 7. دوال إضافة صفوف المنتجات في الفاتورة
+// ============================================================
+
+/**
+ * إضافة صف منتج جديد في الفاتورة
+ */
 function addProductRow() {
     productCount++;
     const tbody = document.getElementById('products-body');
     const row = document.createElement('tr');
-    
+
     const cellNum = document.createElement('td');
     cellNum.textContent = productCount;
     row.appendChild(cellNum);
-    
+
     const cellProduct = document.createElement('td');
     const productDiv = document.createElement('div');
     productDiv.className = 'product-select';
@@ -343,7 +497,7 @@ function addProductRow() {
     productDiv.appendChild(productSpan);
     cellProduct.appendChild(productDiv);
     row.appendChild(cellProduct);
-    
+
     const cellThick = document.createElement('td');
     const thickInput = document.createElement('input');
     thickInput.type = 'number';
@@ -359,7 +513,7 @@ function addProductRow() {
     cellThick.appendChild(thickInput);
     cellThick.appendChild(thickSpan);
     row.appendChild(cellThick);
-    
+
     const cellQty = document.createElement('td');
     const qtyInput = document.createElement('input');
     qtyInput.type = 'number';
@@ -374,7 +528,7 @@ function addProductRow() {
     cellQty.appendChild(qtyInput);
     cellQty.appendChild(qtySpan);
     row.appendChild(cellQty);
-    
+
     const cellPrice = document.createElement('td');
     const priceInput = document.createElement('input');
     priceInput.type = 'number';
@@ -390,7 +544,7 @@ function addProductRow() {
     cellPrice.appendChild(priceInput);
     cellPrice.appendChild(priceSpan);
     row.appendChild(cellPrice);
-    
+
     const cellDisc = document.createElement('td');
     const discInput = document.createElement('input');
     discInput.type = 'number';
@@ -406,12 +560,12 @@ function addProductRow() {
     cellDisc.appendChild(discInput);
     cellDisc.appendChild(discSpan);
     row.appendChild(cellDisc);
-    
+
     const cellTotal = document.createElement('td');
     cellTotal.className = 'total';
     cellTotal.textContent = '0.00';
     row.appendChild(cellTotal);
-    
+
     const cellActions = document.createElement('td');
     cellActions.className = 'no-print';
     const deleteBtn = document.createElement('button');
@@ -419,9 +573,9 @@ function addProductRow() {
     deleteBtn.innerHTML = '<i class="fas fa-trash"></i> حذف';
     cellActions.appendChild(deleteBtn);
     row.appendChild(cellActions);
-    
+
     tbody.appendChild(row);
-    
+
     thickInput.addEventListener('input', function() {
         thickSpan.textContent = this.value;
         calculateRowTotal(row);
@@ -462,7 +616,7 @@ function addProductRow() {
         calculateTotals();
         updatePaymentBalance();
     });
-    
+
     thickSpan.textContent = thickInput.value;
     qtySpan.textContent = qtyInput.value;
     priceSpan.textContent = priceInput.value;
@@ -471,17 +625,72 @@ function addProductRow() {
     calculateRowTotal(row);
 }
 
-function clearProductModalForm() {
-    document.getElementById('modal-product-name').value = '';
-    document.getElementById('modal-product-width').value = '';
-    document.getElementById('modal-product-is-steel').checked = true;
-    document.getElementById('modal-product-length').value = '300';
-    document.getElementById('modal-product-name').focus();
+/**
+ * حساب إجمالي صف واحد
+ */
+function calculateRowTotal(row) {
+    const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+    const price = parseFloat(row.querySelector('.price').value) || 0;
+    const discount = parseFloat(row.querySelector('.discount').value) || 0;
+    const discountAmount = (price * discount) / 100;
+    const priceAfterDiscount = price - discountAmount;
+    const total = priceAfterDiscount * quantity;
+    row.querySelector('.total').textContent = total.toFixed(2);
 }
 
+/**
+ * إعادة ترقيم الصفوف
+ */
+function renumberRows() {
+    const rows = document.querySelectorAll('#products-body tr');
+    productCount = 0;
+    rows.forEach(row => {
+        productCount++;
+        row.cells[0].textContent = productCount;
+    });
+}
+
+/**
+ * حساب الإجماليات الكلية (مع الضريبة)
+ */
+function calculateTotals() {
+    let subtotal = 0, totalDiscount = 0, totalTax = 0, grandTotal = 0;
+    const rows = document.querySelectorAll('#products-body tr');
+
+    rows.forEach(row => {
+        calculateRowTotal(row);
+        const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+        const price = parseFloat(row.querySelector('.price').value) || 0;
+        const discount = parseFloat(row.querySelector('.discount').value) || 0;
+
+        const rowSubtotal = price * quantity;
+        const discountAmount = (rowSubtotal * discount) / 100;
+        const priceAfterDiscount = rowSubtotal - discountAmount;
+
+        const taxRate = 16;
+        const taxAmount = priceAfterDiscount * (taxRate / 100);
+
+        subtotal += rowSubtotal;
+        totalDiscount += discountAmount;
+        totalTax += taxAmount;
+        grandTotal += (priceAfterDiscount + taxAmount);
+    });
+
+    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+    document.getElementById('total-discount').textContent = totalDiscount.toFixed(2);
+    document.getElementById('total-tax').textContent = totalTax.toFixed(2);
+    document.getElementById('grand-total').textContent = grandTotal.toFixed(2);
+}
+
+// ============================================================
+// 8. دوال إدارة المنتجات (النافذة المنبثقة)
+// ============================================================
+
+/**
+ * فتح نافذة إدارة المنتجات
+ */
 function openProductModal() {
     const enteredPassword = prompt('للوصول إلى إدارة المنتجات، يرجى إدخال كلمة المرور:');
-    
     if (enteredPassword !== PRODUCT_EDIT_PASSWORD) {
         if (enteredPassword !== null) {
             showNotification('كلمة المرور غير صحيحة', 'error');
@@ -496,10 +705,27 @@ function openProductModal() {
     modal.style.display = 'flex';
 }
 
+/**
+ * إغلاق نافذة إدارة المنتجات
+ */
 function closeProductModal() {
     document.getElementById('productModal').style.display = 'none';
 }
 
+/**
+ * تفريغ نموذج إدارة المنتجات
+ */
+function clearProductModalForm() {
+    document.getElementById('modal-product-name').value = '';
+    document.getElementById('modal-product-width').value = '';
+    document.getElementById('modal-product-is-steel').checked = true;
+    document.getElementById('modal-product-length').value = '300';
+    document.getElementById('modal-product-name').focus();
+}
+
+/**
+ * عرض قائمة المنتجات في النافذة المنبثقة
+ */
 function populateProductEditorList(filter = '') {
     const tableBody = document.getElementById('modal-product-list-body');
     tableBody.innerHTML = '';
@@ -512,7 +738,7 @@ function populateProductEditorList(filter = '') {
 
     filteredProducts.sort((a, b) => a.name.localeCompare(b.name, 'ar')).forEach(product => {
         const row = tableBody.insertRow();
-        
+
         const nameCell = row.insertCell(0);
         nameCell.textContent = product.name;
 
@@ -556,12 +782,15 @@ function populateProductEditorList(filter = '') {
                 refreshAllProductDropdowns();
             }
         };
-        
+
         actionsCell.appendChild(editBtn);
         actionsCell.appendChild(deleteBtn);
     });
 }
 
+/**
+ * حفظ المنتج من النافذة المنبثقة
+ */
 async function saveProductFromModal() {
     const name = document.getElementById('modal-product-name').value.trim();
     const width = parseFloat(document.getElementById('modal-product-width').value) || null;
@@ -584,16 +813,9 @@ async function saveProductFromModal() {
     refreshAllProductDropdowns();
 }
 
-function calculateRowTotal(row) {
-    const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
-    const price = parseFloat(row.querySelector('.price').value) || 0;
-    const discount = parseFloat(row.querySelector('.discount').value) || 0;
-    const discountAmount = (price * discount) / 100;
-    const priceAfterDiscount = price - discountAmount;
-    const total = priceAfterDiscount * quantity;
-    row.querySelector('.total').textContent = total.toFixed(2);
-}
-
+/**
+ * تحديث جميع القوائم المنسدلة للمنتجات
+ */
 function refreshAllProductDropdowns() {
     const selects = document.querySelectorAll('.product-name');
     selects.forEach(select => {
@@ -606,55 +828,20 @@ function refreshAllProductDropdowns() {
         });
         options += '<option value="--add-new--" style="font-weight:bold; background-color:#e8f5e9;">+ إضافة أو تعديل منتج...</option>';
         select.innerHTML = options;
-        
+
         if (products.some(p => p.name === currentValue)) {
             select.value = currentValue;
         }
     });
 }
 
-function renumberRows() {
-    const rows = document.querySelectorAll('#products-body tr');
-    productCount = 0;
-    rows.forEach(row => {
-        productCount++;
-        row.cells[0].textContent = productCount;
-    });
-}
+// ============================================================
+// 9. دوال الدفع (المعدلة بالكامل)
+// ============================================================
 
-function calculateTotals() {
-    let subtotal = 0, totalDiscount = 0, totalTax = 0, grandTotal = 0;
-    const rows = document.querySelectorAll('#products-body tr');
-    
-    rows.forEach(row => {
-        calculateRowTotal(row);
-        const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
-        const price = parseFloat(row.querySelector('.price').value) || 0;
-        const discount = parseFloat(row.querySelector('.discount').value) || 0;
-        
-        const rowSubtotal = price * quantity;
-        const discountAmount = (rowSubtotal * discount) / 100;
-        const priceAfterDiscount = rowSubtotal - discountAmount;
-        
-        // --- التعديل المالي: حساب الضريبة 16% وإضافتها للمجموع (Tax Exclusive) ---
-        const taxRate = 16;
-        const taxAmount = priceAfterDiscount * (taxRate / 100);
-        
-        subtotal += rowSubtotal;
-        totalDiscount += discountAmount;
-        totalTax += taxAmount;
-        grandTotal += (priceAfterDiscount + taxAmount);
-    });
-    
-    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
-    document.getElementById('total-discount').textContent = totalDiscount.toFixed(2);
-    document.getElementById('total-tax').textContent = totalTax.toFixed(2);
-    document.getElementById('grand-total').textContent = grandTotal.toFixed(2);
-}
-
-// =========================================
-// دوال الدفع
-// =========================================
+/**
+ * تحديث رصيد الدفع المتبقي
+ */
 function updatePaymentBalance() {
     const grandTotal = parseFloat(document.getElementById('grand-total').textContent) || 0;
     const previousBalance = parseFloat(document.getElementById('previous-balance').textContent) || 0;
@@ -674,6 +861,9 @@ function updatePaymentBalance() {
     }
 }
 
+/**
+ * إعداد أحداث طرق الدفع (واحدة)
+ */
 document.querySelectorAll('input[name="payment-method"]').forEach(radio => {
     radio.addEventListener('change', function() {
         document.getElementById('check-fields-single').style.display = this.value === 'check' ? 'grid' : 'none';
@@ -688,6 +878,9 @@ document.querySelectorAll('input[name="payment-method"]').forEach(radio => {
     });
 });
 
+/**
+ * معاينة صورة الشيك (دفعة واحدة)
+ */
 document.getElementById('check-image-single').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
@@ -701,6 +894,9 @@ document.getElementById('check-image-single').addEventListener('change', functio
     }
 });
 
+/**
+ * إعداد طرق الدفع المتعددة
+ */
 function setupMultiplePayments() {
     const addBtn = document.getElementById('add-payment-method');
     if (addBtn) {
@@ -712,6 +908,9 @@ function setupMultiplePayments() {
     });
 }
 
+/**
+ * معالج إضافة طريقة دفع جديدة
+ */
 function addPaymentMethodHandler() {
     const paymentSection = document.getElementById('multiple-payments-section');
     const addButton = document.getElementById('add-payment-method');
@@ -721,6 +920,9 @@ function addPaymentMethodHandler() {
     updateMultiplePaymentsTotal();
 }
 
+/**
+ * إنشاء صف دفع جديد
+ */
 function createPaymentRow() {
     const paymentRow = document.createElement('div');
     paymentRow.className = 'payment-row';
@@ -744,6 +946,9 @@ function createPaymentRow() {
     return paymentRow;
 }
 
+/**
+ * إعداد أحداث صف الدفع
+ */
 function setupPaymentRow(row) {
     const methodSelect = row.querySelector('.payment-method-select');
     const checkFields = row.querySelector('.check-fields-multiple');
@@ -783,6 +988,9 @@ function setupPaymentRow(row) {
     }
 }
 
+/**
+ * تحديث إجمالي المدفوعات المتعددة
+ */
 function updateMultiplePaymentsTotal() {
     let total = 0;
     document.querySelectorAll('.payment-amount').forEach(input => {
@@ -792,14 +1000,159 @@ function updateMultiplePaymentsTotal() {
     updatePaymentBalance();
 }
 
-// =========================================
-// دوال سجل المشتريات
-// =========================================
+// ============================================================
+// 10. دوال إضافة الدفعة (المعدلة بالكامل)
+// ============================================================
+
+/**
+ * إضافة دفعة جديدة لعميل مع توزيعها على الفواتير غير المدفوعة
+ */
+async function addPayment() {
+    const amount = parseFloat(document.getElementById('client-payment-amount-input').value) || 0;
+    const method = document.getElementById('payment-method-select').value;
+
+    if (amount <= 0) {
+        showNotification('يرجى إدخال مبلغ صحيح', 'error');
+        return;
+    }
+    if (!currentViewingClient) {
+        showNotification('لم يتم تحديد عميل', 'error');
+        return;
+    }
+
+    const clientIndex = clients.findIndex(c => c.name === currentViewingClient);
+    if (clientIndex === -1) {
+        showNotification('لم يتم العثور على العميل', 'error');
+        return;
+    }
+
+    const client = clients[clientIndex];
+    let checkDetails = null;
+    if (method === 'check') {
+        const checkNumber = document.getElementById('client-check-number').value;
+        const checkDate = document.getElementById('client-check-date').value;
+        const checkImagePreview = document.getElementById('client-check-preview');
+        const checkImage = checkImagePreview.style.display !== 'none' ? checkImagePreview.src : '';
+        checkDetails = { checkNumber, checkDate, checkImage };
+    }
+
+    // إنشاء كائن الدفعة
+    const payment = {
+        id: `pay_${Date.now()}`,
+        date: new Date().toISOString(),
+        amount: amount,
+        method: method,
+        checkDetails: checkDetails,
+        invoiceIds: [] // سنملؤه بالفواتير المطبقة عليها
+    };
+
+    // الحصول على فواتير العميل غير المدفوعة بالكامل، مرتبة من الأقدم للأحدث
+    const clientInvoices = invoices
+        .filter(inv => inv.client.name === currentViewingClient && inv.payment.remainingBalance > 0)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    let remainingAmount = amount;
+    const appliedInvoiceIds = [];
+
+    // توزيع الدفعة على الفواتير
+    for (let inv of clientInvoices) {
+        if (remainingAmount <= 0) break;
+
+        const oldRemaining = inv.payment.remainingBalance;
+        const paidThisInvoice = Math.min(remainingAmount, oldRemaining);
+
+        // تحديث رصيد الفاتورة المتبقي
+        inv.payment.remainingBalance = oldRemaining - paidThisInvoice;
+        inv.payment.paidAmount = (inv.payment.paidAmount || 0) + paidThisInvoice;
+        inv.status = inv.payment.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة';
+
+        appliedInvoiceIds.push(inv.id);
+        remainingAmount -= paidThisInvoice;
+    }
+
+    // حفظ معرفات الفواتير التي طُبقت عليها الدفعة
+    payment.invoiceIds = appliedInvoiceIds;
+
+    // تحديث رصيد العميل: خصم المبلغ المدفوع (الجزء المطبق على الفواتير)
+    const appliedAmount = amount - remainingAmount;
+    client.balance = (client.balance || 0) - appliedAmount;
+
+    // إذا بقي مبلغ زائد، نضيفه كرصيد دائن (تسوية يدوية)
+    if (remainingAmount > 0) {
+        if (!client.adjustments) client.adjustments = [];
+        client.adjustments.push({
+            id: `adj_${Date.now()}`,
+            date: new Date().toISOString(),
+            amount: -remainingAmount, // سالب = دائن
+            reason: 'دفعة زائدة عن إجمالي الفواتير'
+        });
+        client.balance = (client.balance || 0) - remainingAmount;
+    }
+
+    // إضافة الدفعة إلى سجل دفعات العميل
+    if (!client.payments) client.payments = [];
+    client.payments.push(payment);
+
+    // حفظ التغييرات
+    localStorage.setItem('invoices', JSON.stringify(invoices));
+    localStorage.setItem('clients', JSON.stringify(clients));
+
+    try {
+        // مزامنة كل فاتورة تم تحديثها
+        for (let inv of clientInvoices) {
+            if (appliedInvoiceIds.includes(inv.id)) {
+                await sendToCloud({ action: 'saveInvoice', invoice: inv });
+            }
+        }
+        // مزامنة العميل
+        await sendToCloud({ action: 'saveClient', client: client });
+        showNotification('تم إضافة الدفعة ومزامنتها بنجاح');
+
+        // تخزين معلومات الدفعة الأخيرة لطباعة الإيصال
+        lastAddedPaymentInfo = {
+            clientName: currentViewingClient,
+            payment: payment,
+            appliedAmount: appliedAmount,
+            remainingAmount: remainingAmount
+        };
+        document.getElementById('receiptOptionsModal').style.display = 'flex';
+    } catch (err) {
+        console.error('فشل مزامنة الدفعة:', err);
+        showNotification('تم حفظ الدفعة محلياً، لكن فشلت المزامنة السحابية', 'error');
+    }
+
+    // إغلاق النافذة وتحديث الواجهة
+    document.getElementById('paymentModal').style.display = 'none';
+    loadClientsList();
+    if (document.getElementById('client-invoices-section').style.display === 'block' &&
+        document.getElementById('current-client-name').textContent === currentViewingClient) {
+        viewClientInvoices(currentViewingClient);
+    }
+
+    // تنظيف الحقول
+    document.getElementById('client-payment-amount-input').value = '0.00';
+    document.getElementById('client-payment-check-fields').style.display = 'none';
+    document.getElementById('client-check-number').value = '';
+    document.getElementById('client-check-date').value = '';
+    document.getElementById('client-check-image').value = '';
+    document.getElementById('client-check-preview').style.display = 'none';
+}
+
+// ============================================================
+// 11. دوال سجل المشتريات
+// ============================================================
+
+/**
+ * حذف سجل المشتريات المرتبط بفاتورة معينة
+ */
 function deletePurchaseHistoryByInvoiceId(invoiceId) {
     purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== invoiceId);
     localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
 }
 
+/**
+ * إضافة سجل شراء جديد
+ */
 function addToPurchaseHistory(productName, thickness, quantity, price, total, clientName, invoiceId) {
     const purchase = {
         id: Date.now().toString() + Math.random(),
@@ -816,17 +1169,23 @@ function addToPurchaseHistory(productName, thickness, quantity, price, total, cl
     localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
 }
 
-// =========================================
-// دوال حفظ واسترجاع الفواتير (بعد التعديلات المالية)
-// =========================================
+// ============================================================
+// 12. دوال حفظ واسترجاع الفواتير (المعدلة بالكامل)
+// ============================================================
+
+/**
+ * حفظ الفاتورة (جديدة أو معدلة)
+ */
 async function saveInvoice() {
     const clientName = document.getElementById('client-name').value.trim();
     const clientAddress = document.getElementById('client-address').value.trim();
     const clientPhone = document.getElementById('client-phone').value.trim();
+
     if (!clientName) {
         showNotification('يرجى إدخال اسم العميل', 'error');
         return;
     }
+
     const productsData = [];
     const rows = document.querySelectorAll('#products-body tr');
     rows.forEach(row => {
@@ -840,16 +1199,17 @@ async function saveInvoice() {
             productsData.push({ productName, thickness, quantity, price, discount, total });
         }
     });
+
     if (productsData.length === 0) {
         showNotification('يرجى إضافة منتجات إلى الفاتورة', 'error');
         return;
     }
-    
+
+    // حساب البيانات المالية
     let paymentData = {};
     const grandTotal = parseFloat(document.getElementById('grand-total').textContent) || 0;
-    
-    // --- الإصلاح المالي: فصل مبلغ الدفعة للفاتورة عن الرصيد السابق ---
-    let invoicePaidAmount = 0;
+    const previousBalance = parseFloat(document.getElementById('previous-balance').textContent) || 0;
+    const totalDue = grandTotal + previousBalance;
 
     if (document.getElementById('enable-multiple-payments').checked) {
         const payments = [];
@@ -867,8 +1227,7 @@ async function saveInvoice() {
                 totalPaid += amount;
             }
         });
-        invoicePaidAmount = totalPaid;
-        paymentData = { type: 'multiple', payments, paidAmount: totalPaid, remainingBalance: grandTotal - totalPaid };
+        paymentData = { type: 'multiple', payments, paidAmount: totalPaid, remainingBalance: totalDue - totalPaid };
     } else {
         const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
         const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
@@ -877,12 +1236,13 @@ async function saveInvoice() {
             checkDate: document.getElementById('check-date-single').value || '',
             checkImage: document.getElementById('check-preview-single').src || ''
         } : null;
-        invoicePaidAmount = paidAmount;
-        paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: grandTotal - paidAmount, checkDetails };
+        paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: totalDue - paidAmount, checkDetails };
     }
 
     const selectedDate = document.getElementById('invoice-date-input').value;
     const invoiceDate = selectedDate ? new Date(selectedDate + 'T12:00:00').toISOString() : new Date().toISOString();
+
+    // إنشاء كائن الفاتورة الجديدة
     const invoice = {
         id: editingInvoiceId || generateInvoiceId(),
         date: invoiceDate,
@@ -896,47 +1256,109 @@ async function saveInvoice() {
         status: paymentData.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة'
     };
 
+    // معالجة العميل
     let client = clients.find(c => c.name === clientName);
     const isNewClient = !client;
+
     if (isNewClient) {
-        client = { id: Date.now().toString(), name: clientName, address: clientAddress, phone: clientPhone, balance: 0, createdAt: new Date().toISOString(), payments: [], adjustments: [] };
+        client = {
+            id: Date.now().toString(),
+            name: clientName,
+            address: clientAddress,
+            phone: clientPhone,
+            balance: 0,
+            createdAt: new Date().toISOString(),
+            payments: [],
+            adjustments: []
+        };
     } else {
         client.address = clientAddress;
         client.phone = clientPhone;
     }
-    
-    // --- الإصلاح المالي: تحديث الرصيد بناءً على الفرق الصافي لتجنب تراكم الأرصدة السابقة ---
-    const newInvoiceNet = grandTotal - invoicePaidAmount;
+
+    // === التعديل المالي عند تعديل فاتورة ===
     if (editingInvoiceId && editingInvoiceSnapshot) {
-        const oldInvoiceNet = editingInvoiceSnapshot.grandTotal - editingInvoiceSnapshot.payment.paidAmount;
-        client.balance = (client.balance || 0) - oldInvoiceNet + newInvoiceNet;
-    } else {
-        client.balance = (client.balance || 0) + newInvoiceNet;
-    }
-    
-    if (isNewClient) clients.push(client);
-    localStorage.setItem('clients', JSON.stringify(clients));
-    
-    if (editingInvoiceId) {
+        // 1. استرجاع الدفعات المرتبطة بالفاتورة القديمة
+        const oldClient = clients.find(c => c.name === editingInvoiceSnapshot.client.name);
+        if (oldClient && oldClient.payments) {
+            // إزالة الدفعات المرتبطة بالفاتورة القديمة من سجل العميل القديم
+            const paymentsToRemove = oldClient.payments.filter(p => p.invoiceIds && p.invoiceIds.includes(editingInvoiceId));
+            let totalLinkedAmount = 0;
+            paymentsToRemove.forEach(p => { totalLinkedAmount += p.amount; });
+
+            // تصحيح رصيد العميل القديم: نضيف قيمة الدفعات (لأنها ستُلغى مؤقتاً)
+            oldClient.balance = (oldClient.balance || 0) + totalLinkedAmount;
+            // نطرح الرصيد المتبقي للفاتورة القديمة (لأنه سيتم استبداله)
+            oldClient.balance -= editingInvoiceSnapshot.payment.remainingBalance;
+
+            // حذف الدفعات المرتبطة من سجل العميل القديم (سننقلها للعميل الجديد)
+            oldClient.payments = oldClient.payments.filter(p => !p.invoiceIds || !p.invoiceIds.includes(editingInvoiceId));
+
+            // إذا كان العميل القديم مختلفاً عن العميل الجديد (تغيير الاسم)، ننقل الدفعات للعميل الجديد
+            if (oldClient.name !== clientName) {
+                // ننقل الدفعات إلى العميل الجديد
+                if (!client.payments) client.payments = [];
+                paymentsToRemove.forEach(p => {
+                    p.invoiceIds = p.invoiceIds.map(id => id === editingInvoiceId ? invoice.id : id);
+                    client.payments.push(p);
+                });
+                // نحدّث رصيد العميل الجديد بإضافة قيمة الدفعات المنقولة (لأنها ستُطبق على الفاتورة الجديدة)
+                client.balance = (client.balance || 0) - totalLinkedAmount;
+            } else {
+                // نفس العميل: نعيد الدفعات بعد تحديث معرف الفاتورة
+                if (!client.payments) client.payments = [];
+                paymentsToRemove.forEach(p => {
+                    p.invoiceIds = p.invoiceIds.map(id => id === editingInvoiceId ? invoice.id : id);
+                    client.payments.push(p);
+                });
+                // نخصم قيمة الدفعات من رصيد العميل (لأنها ستُطبق على الفاتورة الجديدة)
+                client.balance = (client.balance || 0) - totalLinkedAmount;
+            }
+        }
+
+        // حذف الفاتورة القديمة من القائمة
         invoices = invoices.filter(inv => inv.id !== editingInvoiceId);
+        // حذف سجل المشتريات القديم
         purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== editingInvoiceId);
+    } else {
+        // فاتورة جديدة: تحديث رصيد العميل بالرصيد المتبقي
+        client.balance = (client.balance || 0) + invoice.payment.remainingBalance;
     }
+
+    // إضافة العميل إذا كان جديداً
+    if (isNewClient) clients.push(client);
+
+    // حفظ العميل
+    localStorage.setItem('clients', JSON.stringify(clients));
+
+    // إضافة سجل المشتريات
     productsData.forEach(product => {
         addToPurchaseHistory(product.productName, product.thickness, product.quantity, product.price, product.total, clientName, invoice.id);
     });
+
+    // حفظ الفاتورة
     invoices.push(invoice);
     localStorage.setItem('invoices', JSON.stringify(invoices));
-    
+    localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+
     try {
+        // مزامنة العميل
         await sendToCloud({ action: 'saveClient', client: client });
-        if (editingInvoiceId) await sendToCloud({ action: 'deleteInvoice', invoiceId: editingInvoiceId });
+        // مزامنة الفاتورة
         await sendToCloud({ action: 'saveInvoice', invoice: invoice });
+        // إذا كان تعديلاً، حذف الفاتورة القديمة من السحابة
+        if (editingInvoiceId) {
+            await sendToCloud({ action: 'deleteInvoice', invoiceId: editingInvoiceId });
+        }
+        // تحديث البيانات من السحابة
         await fetchCloudData();
         showNotification(editingInvoiceId ? 'تم تعديل طلب البيع بنجاح' : 'تم حفظ طلب البيع بنجاح');
     } catch (err) {
         console.error('فشل مزامنة الطلب/العميل:', err);
         showNotification('تم الحفظ محليًا لكن فشلت المزامنة السحابية', 'error');
     }
+
+    // إعادة تعيين النموذج
     editingInvoiceId = null;
     editingInvoiceSnapshot = null;
     resetInvoiceForm();
@@ -945,6 +1367,9 @@ async function saveInvoice() {
     loadInvoicesHistory();
 }
 
+/**
+ * توليد رقم فاتورة جديد
+ */
 function generateInvoiceId() {
     const now = new Date();
     const year = now.getFullYear();
@@ -954,6 +1379,9 @@ function generateInvoiceId() {
     return `INV-${year}${month}${day}-${time}`;
 }
 
+/**
+ * تحميل فاتورة للتعديل
+ */
 function editInvoice(invoiceId) {
     const invoiceIndex = invoices.findIndex(inv => inv.id === invoiceId);
     if (invoiceIndex === -1) {
@@ -966,15 +1394,6 @@ function editInvoice(invoiceId) {
     document.getElementById('client-name').value = invoice.client.name;
     document.getElementById('client-address').value = invoice.client.address || '';
     document.getElementById('client-phone').value = invoice.client.phone || '';
-    
-    // --- الإصلاح المالي: إظهار الرصيد السابق الحقيقي (بدون تأثير الفاتورة الحالية) ---
-    const clientForEdit = clients.find(c => c.name === invoice.client.name);
-    if (clientForEdit) {
-        const oldNet = invoice.grandTotal - invoice.payment.paidAmount;
-        document.getElementById('previous-balance').textContent = ((clientForEdit.balance || 0) - oldNet).toFixed(2);
-        document.getElementById('client-balance-info').style.display = 'block';
-    }
-
     const invoiceDate = new Date(invoice.date);
     const year = invoiceDate.getFullYear();
     const month = String(invoiceDate.getMonth() + 1).padStart(2, '0');
@@ -1054,6 +1473,9 @@ function editInvoice(invoiceId) {
     showNotification('تم تحميل القيم الأصلية للطلب بنجاح');
 }
 
+/**
+ * إعادة تعيين نموذج الفاتورة
+ */
 function resetInvoiceForm() {
     document.getElementById('products-body').innerHTML = '';
     document.getElementById('client-name').value = '';
@@ -1061,7 +1483,6 @@ function resetInvoiceForm() {
     document.getElementById('client-phone').value = '';
     document.getElementById('paid-amount').value = '0.00';
     document.getElementById('client-balance-info').style.display = 'none';
-    document.getElementById('previous-balance').textContent = '0.00'; // --- الإصلاح المالي: تصفير الرصيد المخفي ---
     document.getElementById('subtotal').textContent = '0.00';
     document.getElementById('total-discount').textContent = '0.00';
     document.getElementById('total-tax').textContent = '0.00';
@@ -1097,13 +1518,95 @@ function resetInvoiceForm() {
     setupMultiplePayments();
 }
 
-// =========================================
-// دوال العملاء
-// =========================================
+// ============================================================
+// 13. دوال حذف الفاتورة (المعدلة بالكامل)
+// ============================================================
+
+async function deleteInvoice(invoiceId) {
+    const password = prompt('يرجى إدخال كلمة المرور لحذف طلب البيع:');
+    if (password !== DELETE_PASSWORD) {
+        showNotification('كلمة المرور غير صحيحة', 'error');
+        return;
+    }
+
+    const invoiceToDelete = invoices.find(inv => inv.id === invoiceId);
+    if (!invoiceToDelete) {
+        showNotification('لم يتم العثور على طلب البيع', 'error');
+        return;
+    }
+
+    const clientName = invoiceToDelete.client.name;
+    const clientIndex = clients.findIndex(c => c.name === clientName);
+    if (clientIndex === -1) {
+        showNotification('العميل غير موجود في السجلات', 'error');
+        return;
+    }
+    const client = clients[clientIndex];
+
+    // 1. استرجاع الدفعات المرتبطة بهذه الفاتورة من سجل دفعات العميل
+    const linkedPayments = (client.payments || []).filter(p => p.invoiceIds && p.invoiceIds.includes(invoiceId));
+    let totalLinkedAmount = 0;
+    linkedPayments.forEach(p => { totalLinkedAmount += p.amount; });
+
+    // 2. إزالة هذه الدفعات من سجل الدفعات (لأنها مرتبطة بفاتورة ملغاة)
+    client.payments = (client.payments || []).filter(p => !p.invoiceIds || !p.invoiceIds.includes(invoiceId));
+
+    // 3. تصحيح رصيد العميل:
+    //    الرصيد الجديد = الرصيد الحالي + totalLinkedAmount - invoiceToDelete.payment.remainingBalance
+    client.balance = (client.balance || 0) + totalLinkedAmount - (invoiceToDelete.payment.remainingBalance || 0);
+
+    // 4. حذف الفاتورة من القائمة
+    invoices = invoices.filter(inv => inv.id !== invoiceId);
+    purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== invoiceId);
+
+    // 5. حفظ التغييرات
+    localStorage.setItem('invoices', JSON.stringify(invoices));
+    localStorage.setItem('clients', JSON.stringify(clients));
+    localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+
+    try {
+        // مزامنة العميل مع السحابة
+        await sendToCloud({ action: 'saveClient', client: client });
+        // حذف الفاتورة من السحابة
+        await sendToCloud({ action: 'deleteInvoice', invoiceId: invoiceId });
+        // تحديث البيانات من السحابة
+        await fetchCloudData();
+        showNotification('تم حذف طلب البيع وتحديث الأرصدة والدفعات المرتبطة بنجاح');
+    } catch (err) {
+        console.error('فشل حذف طلب البيع من السحابة:', err);
+        showNotification('تم الحذف محليًا لكن لم يتم حذفه من السحابة', 'error');
+    }
+
+    loadInvoicesHistory();
+    updateDashboard();
+    loadClientsList();
+
+    // تحديث عرض فواتير العميل إذا كان مفتوحاً
+    if (currentViewingClient === clientName) {
+        viewClientInvoices(clientName);
+    }
+}
+
+// ============================================================
+// 14. دوال العملاء
+// ============================================================
+
+/**
+ * تحديث رصيد العميل (دالة قديمة للتوافق)
+ */
 function updateClientBalance(clientName, balanceChange) {
     let client = clients.find(c => c.name === clientName);
     if (!client) {
-        client = { id: Date.now().toString(), name: clientName, address: document.getElementById('client-address').value || '', phone: document.getElementById('client-phone').value || '', balance: balanceChange, createdAt: new Date().toISOString(), payments: [] };
+        client = {
+            id: Date.now().toString(),
+            name: clientName,
+            address: document.getElementById('client-address').value || '',
+            phone: document.getElementById('client-phone').value || '',
+            balance: balanceChange,
+            createdAt: new Date().toISOString(),
+            payments: [],
+            adjustments: []
+        };
         clients.push(client);
     } else {
         client.balance = (client.balance || 0) + balanceChange;
@@ -1111,6 +1614,9 @@ function updateClientBalance(clientName, balanceChange) {
     localStorage.setItem('clients', JSON.stringify(clients));
 }
 
+/**
+ * الإكمال التلقائي لاسم العميل
+ */
 function autocompleteClient(searchTerm) {
     const autocompleteList = document.getElementById('client-autocomplete-list');
     autocompleteList.innerHTML = '';
@@ -1133,6 +1639,9 @@ function autocompleteClient(searchTerm) {
     });
 }
 
+/**
+ * البحث عن عميل
+ */
 function searchClient() {
     const searchTerm = document.getElementById('client-search').value;
     if (!searchTerm) {
@@ -1153,6 +1662,9 @@ function searchClient() {
     }
 }
 
+/**
+ * حفظ العميل (جديد أو معدل)
+ */
 async function saveClient() {
     const name = document.getElementById('new-client-name').value.trim();
     const address = document.getElementById('new-client-address').value.trim();
@@ -1219,6 +1731,9 @@ async function saveClient() {
     updateDashboard();
 }
 
+/**
+ * عرض قائمة العملاء
+ */
 function loadClientsList() {
     const clientList = document.getElementById('client-list');
     clientList.innerHTML = '';
@@ -1270,36 +1785,9 @@ function loadClientsList() {
     });
 }
 
-async function deleteSingleClient(clientName) {
-    const password = prompt('يرجى إدخال كلمة المرور لحذف العميل وجميع فواتيره ودفعاته:');
-    if (password !== DELETE_PASSWORD) {
-        showNotification('كلمة المرور غير صحيحة', 'error');
-        return;
-    }
-    const clientToDelete = clients.find(client => client.name === clientName);
-    clients = clients.filter(client => client.name !== clientName);
-    localStorage.setItem('clients', JSON.stringify(clients));
-    invoices = invoices.filter(invoice => invoice.client && invoice.client.name !== clientName);
-    localStorage.setItem('invoices', JSON.stringify(invoices));
-    purchaseHistory = purchaseHistory.filter(purchase => purchase.clientName !== clientName);
-    localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
-    loadClientsList();
-    loadInvoicesHistory();
-    loadPurchaseHistory();
-    if (currentViewingClient === clientName) {
-        document.getElementById('client-invoices-section').style.display = 'none';
-        currentViewingClient = null;
-    }
-    try {
-        const cloudResult = await sendToCloud({ action: 'deleteClient', clientName: clientName, clientId: clientToDelete ? clientToDelete.id : '' });
-        if (cloudResult) await fetchCloudData();
-        showNotification(`تم حذف العميل ${clientName} وجميع فواتيره ودفعاته بنجاح`);
-    } catch (err) {
-        console.error('فشل حذف العميل من السحابة:', err);
-        showNotification('تم الحذف محليًا لكن لم يتم حذف السجل من السحابة', 'error');
-    }
-    updateDashboard();
-}
+// ============================================================
+// 15. عرض فواتير العميل (المعدل لإظهار الدفعات المرتبطة)
+// ============================================================
 
 function viewClientInvoices(clientName) {
     currentViewingClient = clientName;
@@ -1308,6 +1796,7 @@ function viewClientInvoices(clientName) {
     const clientPayments = document.getElementById('client-payments');
     clientInvoicesSection.style.display = 'block';
     document.getElementById('current-client-name').textContent = clientName;
+
     const client = clients.find(c => c.name === clientName);
     if (client) {
         document.getElementById('current-client-balance').textContent = (client.balance || 0).toFixed(2);
@@ -1318,19 +1807,35 @@ function viewClientInvoices(clientName) {
         document.getElementById('total-client-payments').textContent = totalPayments.toFixed(2);
         displayClientPayments(client);
     }
+
     const clientInvoicesList = invoices.filter(invoice => invoice.client.name === clientName);
     clientInvoices.innerHTML = '';
+
     if (clientInvoicesList.length === 0) {
         clientInvoices.innerHTML = '<p>لا توجد طلبات بيع لهذا العميل</p>';
     } else {
         clientInvoicesList.forEach(invoice => {
             const invoiceDiv = document.createElement('div');
             invoiceDiv.className = 'invoice-item';
+
+            // عرض المنتجات
             let productsHTML = '';
             invoice.products.forEach(product => {
                 const thicknessText = product.thickness ? ` (${product.thickness} مم)` : '';
                 productsHTML += `<div style="margin: 5px 0; padding: 5px; background: #f8f9fa; border-radius: 4px;">${product.productName}${thicknessText} - ${product.quantity} × ${product.price.toFixed(2)} = ${product.total.toFixed(2)} دينار</div>`;
             });
+
+            // عرض الدفعات المرتبطة بهذه الفاتورة
+            const linkedPayments = getInvoicePaymentHistory(invoice.id);
+            let linkedPaymentsHTML = '';
+            if (linkedPayments.length > 0) {
+                linkedPaymentsHTML = '<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;"><strong>الدفعات المرتبطة:</strong><ul style="list-style: none; padding: 0;">';
+                linkedPayments.forEach(p => {
+                    linkedPaymentsHTML += `<li style="margin: 5px 0; padding: 5px; background: #e8f5e9; border-radius: 4px;">${p.amount.toFixed(2)} دينار - ${getPaymentMethodText(p.method)} - ${new Date(p.date).toLocaleDateString('ar-EG')}</li>`;
+                });
+                linkedPaymentsHTML += '</ul></div>';
+            }
+
             let paymentHTML = '';
             if (invoice.payment.type === 'multiple') {
                 paymentHTML = `<div><strong>طرق الدفع:</strong></div>${invoice.payment.payments.map(payment => {
@@ -1348,23 +1853,34 @@ function viewClientInvoices(clientName) {
                     if (invoice.payment.checkDetails.checkImage) paymentHTML += `<div><img src="${invoice.payment.checkDetails.checkImage}" style="max-width:100px; max-height:100px;"></div>`;
                 }
             }
+
             invoiceDiv.innerHTML = `
                 <div class="invoice-header-small"><div><strong>${invoice.id}</strong></div><div>${new Date(invoice.date).toLocaleDateString('ar-EG')}</div></div>
                 <div><strong>المنتجات المشتراة:</strong></div>${productsHTML}
                 <div class="total-section"><div>المجموع الكلي: ${invoice.grandTotal.toFixed(2)} دينار</div>${paymentHTML}<div>المبلغ المتبقي: ${invoice.payment.remainingBalance.toFixed(2)} دينار</div><div>الحالة: ${invoice.status}</div></div>
-                <button class="btn btn-secondary edit-invoice" data-invoice-id="${invoice.id}"><i class="fas fa-edit"></i> تعديل الطلب</button>
+                ${linkedPaymentsHTML}
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                    <button class="btn btn-secondary edit-invoice" data-invoice-id="${invoice.id}"><i class="fas fa-edit"></i> تعديل الطلب</button>
+                    <button class="btn btn-danger delete-invoice" data-invoice-id="${invoice.id}"><i class="fas fa-trash"></i> حذف الطلب</button>
+                </div>
             `;
+
             invoiceDiv.querySelector('.edit-invoice').addEventListener('click', function() {
                 editInvoice(invoice.id);
             });
+            invoiceDiv.querySelector('.delete-invoice').addEventListener('click', function() {
+                deleteInvoice(invoice.id);
+            });
+
             clientInvoices.appendChild(invoiceDiv);
         });
     }
 }
 
-// =========================================
-// السجل المالي الشامل (بعد الإصلاحات)
-// =========================================
+// ============================================================
+// 16. دوال السجل المالي وكشف الحساب
+// ============================================================
+
 function viewFinancialLedger(clientName) {
     const client = clients.find(c => c.name === clientName);
     if (!client) {
@@ -1375,28 +1891,12 @@ function viewFinancialLedger(clientName) {
     const clientPayments = client.payments || [];
     const clientAdjustments = client.adjustments || [];
     let transactions = [];
-    
     clientInvoices.forEach(inv => {
         transactions.push({ date: new Date(inv.date), type: 'invoice', description: `طلب بيع رقم: ${inv.id}`, debit: inv.grandTotal, credit: 0 });
-        
-        // --- الإصلاح المالي: استخراج وعرض الدفعات التي تمت بداخل الفواتير ---
-        if (inv.payment) {
-            if (inv.payment.type === 'single' && inv.payment.paidAmount > 0) {
-                transactions.push({ date: new Date(inv.date), type: 'payment_inside_invoice', description: `دفعة مدمجة بفاتورة ${inv.id} (${getPaymentMethodText(inv.payment.method)})`, debit: 0, credit: inv.payment.paidAmount });
-            } else if (inv.payment.type === 'multiple') {
-                (inv.payment.payments || []).forEach(p => {
-                    if (p.amount > 0) {
-                        transactions.push({ date: new Date(inv.date), type: 'payment_inside_invoice', description: `دفعة مدمجة بفاتورة ${inv.id} (${getPaymentMethodText(p.method)})`, debit: 0, credit: p.amount });
-                    }
-                });
-            }
-        }
     });
-    
     clientPayments.forEach(p => {
-        transactions.push({ date: new Date(p.date), type: 'payment', description: `دفعة خارجية (${getPaymentMethodText(p.method)})`, debit: 0, credit: p.amount, id: p.id });
+        transactions.push({ date: new Date(p.date), type: 'payment', description: `دفعة (${getPaymentMethodText(p.method)})`, debit: 0, credit: p.amount, id: p.id });
     });
-    
     clientAdjustments.forEach((adj, index) => {
         if (!adj.id) adj.id = `adj_legacy_${index}`;
         transactions.push({
@@ -1408,11 +1908,9 @@ function viewFinancialLedger(clientName) {
             id: adj.id
         });
     });
-    
     transactions.sort((a, b) => a.date - b.date);
     let runningBalance = 0;
-    let ledgerHtml = `<table style="width:100%; border-collapse: collapse; font-size: 14px;"><thead><tr style="background-color: #f2f2f2;"><th style="padding: 8px; border: 1px solid #ddd;">التاريخ</th><th style="padding: 8px; border: 1px solid #ddd;">البيان</th><th style="padding: 8px; border: 1px solid #ddd;">مدين (عليه)</th><th style="padding: 8px; border: 1px solid #ddd;">دائن (دفع)</th><th style="padding: 8px; border: 1px solid #ddd;">الرصيد</th><th style="padding: 8px; border: 1px solid #ddd;" class="no-print">إجراءات</th></tr></thead><tbody>`;
-    
+    let ledgerHtml = `<table style="width:100%; border-collapse: collapse; font-size: 14px;"><thead><tr style="background-color: #f2f2f2;"><th style="padding: 8px; border: 1px solid #ddd;">التاريخ</th><th style="padding: 8px; border: 1px solid #ddd;">البيان</th><th style="padding: 8px; border: 1px solid #ddd;">مدين</th><th style="padding: 8px; border: 1px solid #ddd;">دائن</th><th style="padding: 8px; border: 1px solid #ddd;">الرصيد</th><th style="padding: 8px; border: 1px solid #ddd;" class="no-print">إجراءات</th></tr></thead><tbody>`;
     transactions.forEach(t => {
         runningBalance += t.debit - t.credit;
         let actionsHtml = '-';
@@ -1421,47 +1919,21 @@ function viewFinancialLedger(clientName) {
                 <button class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;" onclick="editLedgerAdjustment('${escapeHtml(clientName)}', '${t.id}')"><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger" style="padding: 2px 6px; font-size: 10px;" onclick="deleteLedgerAdjustment('${escapeHtml(clientName)}', '${t.id}')"><i class="fas fa-trash"></i></button>
             `;
-        } else if (t.type === 'payment') { // --- الإصلاح المالي: إمكانية حذف دفعة خارجية ---
-            actionsHtml = `
-                <button class="btn btn-danger" style="padding: 2px 6px; font-size: 10px;" title="حذف الدفعة" onclick="deleteClientPayment('${escapeHtml(clientName)}', '${t.id}')"><i class="fas fa-trash"></i></button>
-            `;
         }
-        
-        ledgerHtml += `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align:center;">${t.date.toLocaleDateString('ar-EG')}</td><td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(t.description)}</td><td style="padding: 8px; border: 1px solid #ddd; color: #c0392b; text-align:center;">${t.debit > 0 ? t.debit.toFixed(2) : ''}</td><td style="padding: 8px; border: 1px solid #ddd; color: #27ae60; text-align:center;">${t.credit > 0 ? t.credit.toFixed(2) : ''}</td><td style="padding: 8px; border: 1px solid #ddd; text-align:center; font-weight:bold; background-color:#fafafa;">${runningBalance.toFixed(2)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align:center;" class="no-print">${actionsHtml}</td></tr>`;
+        ledgerHtml += `<tr><td style="padding: 8px; border: 1px solid #ddd; text-align:center;">${t.date.toLocaleDateString('ar-EG')}</td><td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(t.description)}</td><td style="padding: 8px; border: 1px solid #ddd; color: #c0392b; text-align:center;">${t.debit > 0 ? t.debit.toFixed(2) : ''}</td><td style="padding: 8px; border: 1px solid #ddd; color: #27ae60; text-align:center;">${t.credit > 0 ? t.credit.toFixed(2) : ''}</td><td style="padding: 8px; border: 1px solid #ddd; text-align:center;">${runningBalance.toFixed(2)}</td><td style="padding: 8px; border: 1px solid #ddd; text-align:center;" class="no-print">${actionsHtml}</td></tr>`;
     });
-    
     ledgerHtml += `</tbody></table>`;
     const finalBalance = runningBalance;
-    
     document.getElementById('ledger-client-name').innerHTML = `
         السجل المالي للعميل: <strong>${escapeHtml(clientName)}</strong>
         <div style="font-size: 16px; margin-top: 10px;">
             الرصيد النهائي المحسوب: <strong class="${finalBalance > 0 ? 'balance-negative' : 'balance-positive'}">${finalBalance.toFixed(2)} دينار</strong>
-            ${finalBalance > 0 ? ' (مدين / مطلوب منه)' : finalBalance < 0 ? ' (دائن / له)' : ''}
+            ${finalBalance > 0 ? ' (مدين)' : finalBalance < 0 ? ' (دائن)' : ''}
         </div>
-        <div style="font-size: 12px; color: #777;">(الرصيد في الواجهة: ${client.balance.toFixed(2)})</div>
+        <div style="font-size: 12px; color: #777;">(الرصيد المسجل: ${client.balance.toFixed(2)})</div>
     `;
     document.getElementById('ledger-content').innerHTML = ledgerHtml;
     document.getElementById('ledgerModal').style.display = 'flex';
-}
-
-function showAddPaymentForClient(clientName) {
-    currentViewingClient = clientName;
-    const modal = document.getElementById('paymentModal');
-    const title = document.getElementById('payment-modal-title');
-    title.innerHTML = `إضافة دفعة للعميل: <strong>${escapeHtml(clientName)}</strong>`;
-    
-    document.getElementById('client-payment-amount-input').value = '0.00';
-    document.getElementById('payment-method-select').value = 'cash';
-    document.getElementById('client-payment-check-fields').style.display = 'none';
-    document.getElementById('client-check-number').value = '';
-    document.getElementById('client-check-date').value = '';
-    document.getElementById('client-check-image').value = '';
-    const preview = document.getElementById('client-check-preview');
-    preview.src = '';
-    preview.style.display = 'none';
-
-    modal.style.display = 'flex';
 }
 
 function viewMonthlyStatement(clientName) {
@@ -1525,62 +1997,38 @@ function displayClientPayments(client) {
             <div><strong>المبلغ:</strong> ${payment.amount.toFixed(2)} دينار</div>
             <div><strong>طريقة الدفع:</strong> ${getPaymentMethodText(payment.method)}</div>
             ${checkInfoHTML}
+            ${payment.invoiceIds && payment.invoiceIds.length > 0 ? `<div><strong>مرتبطة بالفواتير:</strong> ${payment.invoiceIds.join(', ')}</div>` : ''}
         `;
         clientPayments.appendChild(paymentDiv);
     });
 }
 
-async function addPayment() {
-    const amount = parseFloat(document.getElementById('client-payment-amount-input').value) || 0;
-    const method = document.getElementById('payment-method-select').value;
-    if (amount <= 0) {
-        showNotification('يرجى إدخال مبلغ صحيح', 'error');
-        return;
-    }
-    if (!currentViewingClient) {
-        showNotification('لم يتم تحديد عميل', 'error');
-        return;
-    }
-    const clientIndex = clients.findIndex(c => c.name === currentViewingClient);
-    if (clientIndex === -1) {
-        showNotification('لم يتم العثور على العميل', 'error');
-        return;
-    }
-    const client = clients[clientIndex];
-    let checkDetails = null;
-    if (method === 'check') {
-        const checkNumber = document.getElementById('client-check-number').value;
-        const checkDate = document.getElementById('client-check-date').value;
-        const checkImagePreview = document.getElementById('client-check-preview');
-        const checkImage = checkImagePreview.style.display !== 'none' ? checkImagePreview.src : '';
-        checkDetails = { checkNumber, checkDate, checkImage };
-    }
-    const payment = { id: Date.now().toString(), date: new Date().toISOString(), amount: amount, method: method, checkDetails: checkDetails };
-    if (!client.payments) client.payments = [];
-    client.payments.push(payment);
-    client.balance = (client.balance || 0) - amount;
-    localStorage.setItem('clients', JSON.stringify(clients));
-    try {
-        await sendToCloud({ action: 'saveClient', client: client });
-        showNotification('تم إضافة الدفعة ومزامنتها بنجاح');
-        lastAddedPaymentInfo = { clientName: currentViewingClient, payment: payment };
-        document.getElementById('receiptOptionsModal').style.display = 'flex';
-    } catch (err) {
-        console.error('فشل مزامنة الدفعة:', err);
-        showNotification('تم حفظ الدفعة محلياً، لكن فشلت المزامنة السحابية', 'error');
-    }
-    document.getElementById('paymentModal').style.display = 'none';
-    loadClientsList();
-    if (document.getElementById('client-invoices-section').style.display === 'block' && document.getElementById('current-client-name').textContent === currentViewingClient) {
-        viewClientInvoices(currentViewingClient);
-    }
+// ============================================================
+// 17. دوال إضافة دفعة للعميل (نافذة منبثقة)
+// ============================================================
+
+function showAddPaymentForClient(clientName) {
+    currentViewingClient = clientName;
+    const modal = document.getElementById('paymentModal');
+    const title = document.getElementById('payment-modal-title');
+    title.innerHTML = `إضافة دفعة للعميل: <strong>${escapeHtml(clientName)}</strong>`;
+
     document.getElementById('client-payment-amount-input').value = '0.00';
+    document.getElementById('payment-method-select').value = 'cash';
     document.getElementById('client-payment-check-fields').style.display = 'none';
     document.getElementById('client-check-number').value = '';
     document.getElementById('client-check-date').value = '';
     document.getElementById('client-check-image').value = '';
-    document.getElementById('client-check-preview').style.display = 'none';
+    const preview = document.getElementById('client-check-preview');
+    preview.src = '';
+    preview.style.display = 'none';
+
+    modal.style.display = 'flex';
 }
+
+// ============================================================
+// 18. دوال تصفية العملاء
+// ============================================================
 
 function filterClients(searchTerm) {
     const clientItems = document.querySelectorAll('.client-item');
@@ -1590,72 +2038,10 @@ function filterClients(searchTerm) {
     });
 }
 
-function getPaymentMethodText(method) {
-    const map = { 'cash': 'كاش', 'check': 'شيكات', 'exchange': 'تبديل بضائع', 'bank': 'تحويل بنكي', 'receivable': 'ذمم', 'manual': 'تسوية يدوية' };
-    return map[method] || method;
-}
+// ============================================================
+// 19. دوال سجل الفواتير
+// ============================================================
 
-function numberToArabicWords(number) {
-    const ones = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة'];
-    const teens = ['عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
-    const tens = ['', 'عشرة', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
-    const hundreds = ['', 'مائة', 'مئتان', 'ثلاثمائة', 'أربعمائة', 'خمسمائة', 'ستمائة', 'سبعمائة', 'ثمانمائة', 'تسعمائة'];
-    const thousands = ['', 'ألف', 'ألفان', 'آلاف', 'آلاف'];
-
-    let num = Math.floor(number);
-    let remainder = Math.round((number - num) * 100);
-
-    if (num === 0) return 'صفر';
-
-    let words = [];
-
-    function convertLessThanOneThousand(n) {
-        let tempWords = [];
-        if (n >= 100) {
-            tempWords.push(hundreds[Math.floor(n / 100)]);
-            n %= 100;
-        }
-        if (n > 0) {
-            if (tempWords.length > 0) tempWords.push('و');
-            if (n >= 10 && n < 20) {
-                tempWords.push(teens[n - 10]);
-            } else {
-                if (n >= 20) {
-                    tempWords.push(tens[Math.floor(n / 10)]);
-                    if (n % 10 > 0) tempWords.push('و');
-                    n %= 10;
-                }
-                if (n > 0) {
-                    tempWords.push(ones[n]);
-                }
-            }
-        }
-        return tempWords.join(' ');
-    }
-
-    if (num >= 1000) {
-        const thousandPart = Math.floor(num / 1000);
-        if (thousandPart === 1) words.push(thousands[1]);
-        else if (thousandPart === 2) words.push(thousands[2]);
-        else if (thousandPart >= 3 && thousandPart <= 10) words.push(convertLessThanOneThousand(thousandPart) + ' ' + thousands[3]);
-        else words.push(convertLessThanOneThousand(thousandPart) + ' ' + thousands[1]);
-        num %= 1000;
-    }
-
-    if (num > 0) {
-        if (words.length > 0) words.push('و');
-        words.push(convertLessThanOneThousand(num));
-    }
-
-    let result = words.join(' ');
-    result += ' دينار' + (remainder > 0 ? ` و ${convertLessThanOneThousand(remainder)} قرشاً` : '') + ' فقط لا غير';
-
-    return result.replace(/\s+/g, ' ').trim();
-}
-
-// =========================================
-// دوال سجل الفواتير
-// =========================================
 function searchInvoicesHistory() {
     const searchTerm = document.getElementById('history-client-search').value;
     if (!searchTerm) { loadInvoicesHistory(); return; }
@@ -1730,9 +2116,9 @@ function displayInvoicesHistory(invoicesList) {
     });
 }
 
-function escapeHtml(value) {
-    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+// ============================================================
+// 20. دوال الطباعة والتصدير (PDF)
+// ============================================================
 
 function getPrintStyles() {
     return `
@@ -1767,79 +2153,22 @@ function getPrintStyles() {
         .signature-box { text-align: center; font-size: 11pt; color: #555; }
         .signature-line { border-top: 1px solid #888; width: 200px; margin-top: 40px; }
         .print-footer { margin-top: 20px; font-size: 9pt; color: #999; text-align: center; border-top: 1px solid #eee; padding-top: 10px; page-break-before: auto; }
-        
-        /* Modern Invoice Styles */
-        .modern-invoice {
-            font-size: 10pt;
-            color: #333;
-        }
-        .modern-invoice .header {
-            background: #f8f9fa;
-            color: #2c3e50;
-            padding: 20px;
-            border-radius: 8px 8px 0 0;
-            text-align: center;
-            border-bottom: 5px solid #3498db;
-        }
-        .modern-invoice .header h1, .modern-invoice .header h2 {
-            color: #2c3e50;
-            margin: 0;
-        }
-        .modern-invoice .header h1 {
-            font-size: 20pt;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .modern-invoice .header .document-title-print {
-            font-size: 16pt;
-            font-weight: bold;
-            color: #3498db;
-        }
-        
-        .modern-invoice .factory-details, .modern-invoice .factory-ids {
-            font-size: 10pt;
-            color: #555;
-            line-height: 1.6;
-            margin-bottom: 20px;
-        }
-        .modern-invoice .factory-details span, .modern-invoice .factory-ids span {
-            display: block;
-        }
-
-        .modern-invoice .invoice-meta {
-            display: flex;
-            justify-content: space-between;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            margin: 20px 0;
-            border: 1px solid #eee;
-        }
+        .modern-invoice { font-size: 10pt; color: #333; }
+        .modern-invoice .header { background: #f8f9fa; color: #2c3e50; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; border-bottom: 5px solid #3498db; }
+        .modern-invoice .header h1, .modern-invoice .header h2 { color: #2c3e50; margin: 0; }
+        .modern-invoice .header h1 { font-size: 20pt; font-weight: bold; margin-bottom: 10px; }
+        .modern-invoice .header .document-title-print { font-size: 16pt; font-weight: bold; color: #3498db; }
+        .modern-invoice .factory-details, .modern-invoice .factory-ids { font-size: 10pt; color: #555; line-height: 1.6; margin-bottom: 20px; }
+        .modern-invoice .factory-details span, .modern-invoice .factory-ids span { display: block; }
+        .modern-invoice .invoice-meta { display: flex; justify-content: space-between; padding: 20px; background: #f8f9fa; border-radius: 8px; margin: 20px 0; border: 1px solid #eee; }
         .modern-invoice .invoice-meta div { line-height: 1.8; }
         .modern-invoice .invoice-meta strong { color: #2c3e50; }
-        
         .modern-invoice .document-title { display: none; }
-        
-        .modern-invoice table {
-            border-collapse: separate;
-            border-spacing: 0;
-            margin-top: 0;
-            font-size: 10pt;
-        }
-        .modern-invoice th, .modern-invoice td {
-            border: none;
-            padding: 12px 15px;
-            text-align: right;
-            border-bottom: 1px solid #eee;
-        }
-        .modern-invoice th {
-            background: #3498db;
-            color: white;
-            font-weight: bold;
-        }
+        .modern-invoice table { border-collapse: separate; border-spacing: 0; margin-top: 0; font-size: 10pt; }
+        .modern-invoice th, .modern-invoice td { border: none; padding: 12px 15px; text-align: right; border-bottom: 1px solid #eee; }
+        .modern-invoice th { background: #3498db; color: white; font-weight: bold; }
         .modern-invoice th:first-child { border-radius: 0 5px 5px 0; }
         .modern-invoice th:last-child { border-radius: 5px 0 0 5px; }
-        
         .modern-invoice .invoice-body { display: flex; gap: 20px; margin-top: 20px; page-break-inside: avoid; }
         .modern-invoice .invoice-main { flex-grow: 1; }
         .modern-invoice .invoice-aside { width: 250px; flex-shrink: 0; }
@@ -1849,64 +2178,25 @@ function getPrintStyles() {
         .modern-invoice .totals-row.grand-total { font-size: 14pt; font-weight: bold; color: #3498db; border-top: 2px solid #3498db; margin-top: 10px; padding-top: 10px; }
         .modern-invoice .totals-row.balance { font-size: 12pt; font-weight: bold; color: #c0392b; background: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 5px; }
         .modern-invoice .signature-section { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; }
-        .modern-invoice .print-footer {
-            margin-top: 30px;
-            padding-top: 15px;
-            border-top: 1px solid #eee;
-            text-align: center;
-            font-size: 9pt;
-            color: #777;
-        }
+        .modern-invoice .print-footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #eee; text-align: center; font-size: 9pt; color: #777; }
         .modern-invoice .print-footer p { margin: 5px 0; }
-
         @media print { body { background: #fff; } .print-page { padding: 0; margin: 0; box-shadow: none; min-height: 0; } }
     `;
 }
 
 function buildOfficialHeader(documentTitle) {
-    if (documentTitle.trim() === 'طلب بيع') {
-        return `
+    return `
         <div class="header">
             <h1>${FACTORY_NAME}</h1>
             <div class="factory-details" style="margin-bottom: 0;">
                 <span>${FACTORY_ADDRESS}</span>
                 <span>الهاتف: ${FACTORY_PHONE}</span>
+                <span>الرقم الضريبي: ${FACTORY_TAX_ID}</span>
+                <span>السجل التجاري: ${FACTORY_CR_ID}</span>
             </div>
         </div>
-        `;
-    }
-    return `
-    <div class="header">
-        <h1>${FACTORY_NAME}</h1>
-        <div class="factory-details">
-            <span>${FACTORY_ADDRESS}</span>
-            <span>الهاتف: ${FACTORY_PHONE}</span>
-        </div>
         <h2 class="document-title-print">${escapeHtml(documentTitle)}</h2>
-    </div>
     `;
-}
-
-function openProfessionalPrintWindow(title, bodyHtml) {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        showNotification('لم يتم فتح نافذة الطباعة', 'error');
-        return null;
-    }
-    printWindow.document.write(`
-        <html dir="rtl">
-        <head><title>${escapeHtml(title)}</title>
-        <style>
-            ${getPrintStyles()}
-        </style>
-        </head>
-        <body>${bodyHtml}</body>
-        </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    return printWindow;
 }
 
 function buildInvoicePrintBody(invoice) {
@@ -1973,9 +2263,9 @@ function buildInvoicePrintBody(invoice) {
                 </div>
             </div>
         </div>
-        
+
         <div class="signature-section"><div class="signature-box">توقيع المستلم<div class="signature-line"></div></div><div class="signature-box">توقيع الإدارة<div class="signature-line"></div></div></div>
-        
+
         <div class="print-footer">
             <p>نشكر لكم ثقتكم بنا ونتطلع لخدمتكم مرة أخرى.</p>
             <p>هذا المستند صدر من نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</p>
@@ -1988,9 +2278,77 @@ function printInvoiceRecord(invoice) {
     openProfessionalPrintWindow(`طلب بيع ${invoice.id}`, bodyHtml);
 }
 
-// =========================================
-// دوال عروض الأسعار
-// =========================================
+function exportInvoiceAsPDF(invoiceId) {
+    const { jsPDF } = window.jspdf;
+    const invoice = invoices.find(inv => inv.id === invoiceId);
+    if (!invoice) {
+        showNotification('لم يتم العثور على طلب البيع', 'error');
+        return;
+    }
+    showNotification('جاري تجهيز ملف PDF...', 'success');
+    const printContainer = document.createElement('div');
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    document.body.appendChild(printContainer);
+
+    const bodyHtml = buildInvoicePrintBody(invoice);
+    printContainer.innerHTML = `<style>${getPrintStyles()}</style>${bodyHtml}`;
+
+    const invoiceElement = printContainer.querySelector('.print-page');
+
+    html2canvas(invoiceElement, { scale: 3, useCORS: true, logging: false }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const PDF_MARGIN = 15;
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const printableWidth = pdfWidth - (PDF_MARGIN * 2);
+        const printableHeight = pdfHeight - (PDF_MARGIN * 2);
+        const ratio = canvas.width / canvas.height;
+        let imgWidth = printableWidth;
+        let imgHeight = imgWidth / ratio;
+        if (imgHeight > printableHeight) {
+            imgHeight = printableHeight;
+            imgWidth = imgHeight * ratio;
+        }
+        const xOffset = PDF_MARGIN + (printableWidth - imgWidth) / 2;
+        const yOffset = PDF_MARGIN + (printableHeight - imgHeight) / 2;
+        pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
+        pdf.save(`طلب-بيع-${invoice.id}.pdf`);
+        document.body.removeChild(printContainer);
+        showNotification('تم تحميل طلب البيع كملف PDF بنجاح.');
+    }).catch(err => {
+        console.error("خطأ في إنشاء PDF:", err);
+        showNotification('حدث خطأ أثناء إنشاء ملف PDF', 'error');
+        document.body.removeChild(printContainer);
+    });
+}
+
+function openProfessionalPrintWindow(title, bodyHtml) {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showNotification('لم يتم فتح نافذة الطباعة', 'error');
+        return null;
+    }
+    printWindow.document.write(`
+        <html dir="rtl">
+        <head><title>${escapeHtml(title)}</title>
+        <style>
+            ${getPrintStyles()}
+        </style>
+        </head>
+        <body>${bodyHtml}</body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    return printWindow;
+}
+
+// ============================================================
+// 21. دوال عروض الأسعار
+// ============================================================
 
 function setupQuoteTab() {
     resetQuoteForm();
@@ -2006,7 +2364,7 @@ function resetQuoteForm() {
     document.getElementById('quote-grand-total').textContent = '0.00';
     quoteProductCount = 0;
     addQuoteProductRow();
-    
+
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -2019,7 +2377,7 @@ function updateQuoteDatesFromInput() {
     const dateInput = document.getElementById('quote-date-input').value;
     const quoteNumberSpan = document.getElementById('quote-number');
     const date = dateInput ? new Date(dateInput + 'T12:00:00') : new Date();
-    
+
     document.getElementById('quote-date').textContent = date.toLocaleDateString('en-US');
     document.getElementById('quote-hijri-date').textContent = getHijriDateFromDate(date);
     quoteNumberSpan.textContent = `Q-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}-${String(Date.now()).slice(-4)}`;
@@ -2029,7 +2387,7 @@ function addQuoteProductRow() {
     quoteProductCount++;
     const tbody = document.getElementById('quote-products-body');
     const row = document.createElement('tr');
-    
+
     row.innerHTML = `
         <td>${quoteProductCount}</td>
         <td><select class="product-name"></select></td>
@@ -2101,7 +2459,6 @@ function calculateQuoteTotals() {
 
     document.getElementById('quote-subtotal').textContent = subtotal.toFixed(2);
     document.getElementById('quote-total-discount').textContent = totalDiscount.toFixed(2);
-    // --- التعديل المالي: منع مشاكل دقة الفواصل العشرية ---
     document.getElementById('quote-grand-total').textContent = Number(grandTotal).toFixed(2);
 }
 
@@ -2223,144 +2580,10 @@ function exportQuoteAsPDF() {
     });
 }
 
-function printCurrentInvoiceFromForm() {
-    const invoice = getCurrentInvoiceFromForm();
-    const bodyHtml = buildInvoicePrintBody(invoice);
-    openProfessionalPrintWindow(`فاتورة ${invoice.id}`, bodyHtml);
-}
+// ============================================================
+// 22. دوال سجل المشتريات (العرض)
+// ============================================================
 
-function exportCurrentInvoiceAsPDF() {
-    const { jsPDF } = window.jspdf;
-    const invoice = getCurrentInvoiceFromForm();
-    if (!invoice.client.name || invoice.products.length === 0) {
-        showNotification('يرجى تعبئة بيانات طلب البيع أولاً (العميل والمنتجات)', 'error');
-        return;
-    }
-    showNotification('جاري تجهيز ملف PDF...', 'success');
-    const printContainer = document.createElement('div');
-    printContainer.style.position = 'absolute';
-    printContainer.style.left = '-9999px';
-    document.body.appendChild(printContainer);
-    const bodyHtml = buildInvoicePrintBody(invoice);
-    printContainer.innerHTML = `<style>${getPrintStyles()}</style>${bodyHtml}`;
-    const invoiceElement = printContainer.querySelector('.print-page');
-    html2canvas(invoiceElement, { scale: 3, useCORS: true, logging: false }).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-        const PDF_MARGIN = 15;
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const printableWidth = pdfWidth - (PDF_MARGIN * 2);
-        const printableHeight = pdfHeight - (PDF_MARGIN * 2);
-        const ratio = canvas.width / canvas.height;
-        let imgWidth = printableWidth;
-        let imgHeight = imgWidth / ratio;
-        if (imgHeight > printableHeight) {
-            imgHeight = printableHeight;
-            imgWidth = imgHeight * ratio;
-        }
-        const xOffset = PDF_MARGIN + (printableWidth - imgWidth) / 2;
-        const yOffset = PDF_MARGIN + (printableHeight - imgHeight) / 2;
-        pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
-        pdf.save(`طلب-بيع-${invoice.id}.pdf`);
-        document.body.removeChild(printContainer);
-        showNotification('تم تحميل طلب البيع كملف PDF بنجاح.');
-    }).catch(err => {
-        console.error("خطأ في إنشاء PDF:", err);
-        showNotification('حدث خطأ أثناء إنشاء ملف PDF', 'error');
-        document.body.removeChild(printContainer);
-    });
-}
-
-// --- التعديل المالي الحرج: تحديث رصيد العميل عند الحذف ---
-async function deleteInvoice(invoiceId) {
-    const password = prompt('يرجى إدخال كلمة المرور لحذف طلب البيع:');
-    if (password !== DELETE_PASSWORD) {
-        showNotification('كلمة المرور غير صحيحة', 'error');
-        return;
-    }
-
-    const invoiceToDelete = invoices.find(inv => inv.id === invoiceId);
-    if (invoiceToDelete) {
-        const clientIndex = clients.findIndex(c => c.name === invoiceToDelete.client.name);
-        if (clientIndex !== -1) {
-            // --- الإصلاح المالي: استرجاع صافي تأثير الفاتورة على حساب العميل ---
-            const oldNet = invoiceToDelete.grandTotal - invoiceToDelete.payment.paidAmount;
-            clients[clientIndex].balance = (clients[clientIndex].balance || 0) - oldNet;
-            
-            localStorage.setItem('clients', JSON.stringify(clients));
-            sendToCloud({ action: 'saveClient', client: clients[clientIndex] }).catch(err => console.error(err));
-        }
-    }
-
-    invoices = invoices.filter(inv => inv.id !== invoiceId);
-    localStorage.setItem('invoices', JSON.stringify(invoices));
-    purchaseHistory = purchaseHistory.filter(p => p.invoiceId !== invoiceId);
-    localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
-    
-    try {
-        await sendToCloud({ action: 'deleteInvoice', invoiceId: invoiceId });
-        await fetchCloudData();
-        showNotification('تم حذف طلب البيع وتحديث الأرصدة بنجاح');
-    } catch (err) {
-        console.error('فشل حذف طلب البيع من السحابة:', err);
-        showNotification('تم الحذف محليًا لكن لم يتم حذفه من السحابة', 'error');
-    }
-    
-    loadInvoicesHistory();
-    updateDashboard();
-    loadClientsList(); // تحديث لعرض الرصيد الجديد
-}
-
-function exportInvoiceAsPDF(invoiceId) {
-    const { jsPDF } = window.jspdf;
-    const invoice = invoices.find(inv => inv.id === invoiceId);
-    if (!invoice) {
-        showNotification('لم يتم العثور على طلب البيع', 'error');
-        return;
-    }
-    showNotification('جاري تجهيز ملف PDF...', 'success');
-    const printContainer = document.createElement('div');
-    printContainer.style.position = 'absolute';
-    printContainer.style.left = '-9999px';
-    document.body.appendChild(printContainer);
-    
-    const bodyHtml = buildInvoicePrintBody(invoice);
-    printContainer.innerHTML = `<style>${getPrintStyles()}</style>${bodyHtml}`;
-    
-    const invoiceElement = printContainer.querySelector('.print-page');
-    
-    html2canvas(invoiceElement, { scale: 3, useCORS: true, logging: false }).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-        const PDF_MARGIN = 15;
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const printableWidth = pdfWidth - (PDF_MARGIN * 2);
-        const printableHeight = pdfHeight - (PDF_MARGIN * 2);
-        const ratio = canvas.width / canvas.height;
-        let imgWidth = printableWidth;
-        let imgHeight = imgWidth / ratio;
-        if (imgHeight > printableHeight) {
-            imgHeight = printableHeight;
-            imgWidth = imgHeight * ratio;
-        }
-        const xOffset = PDF_MARGIN + (printableWidth - imgWidth) / 2;
-        const yOffset = PDF_MARGIN + (printableHeight - imgHeight) / 2;
-        pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
-        pdf.save(`طلب-بيع-${invoice.id}.pdf`);
-        document.body.removeChild(printContainer);
-        showNotification('تم تحميل طلب البيع كملف PDF بنجاح.');
-    }).catch(err => {
-        console.error("خطأ في إنشاء PDF:", err);
-        showNotification('حدث خطأ أثناء إنشاء ملف PDF', 'error');
-        document.body.removeChild(printContainer);
-    });
-}
-
-// =========================================
-// دوال سجل المشتريات
-// =========================================
 function searchPurchaseHistory() {
     const searchTerm = document.getElementById('purchase-client-search').value;
     if (!searchTerm) { loadPurchaseHistory(); return; }
@@ -2443,9 +2666,10 @@ function loadProductSalesTotals() {
     productSalesDiv.innerHTML = html;
 }
 
-// =========================================
-// دوال الإشعارات
-// =========================================
+// ============================================================
+// 23. دوال الإشعارات
+// ============================================================
+
 function showNotification(message, type = 'success') {
     const notification = document.getElementById('notification');
     notification.textContent = message;
@@ -2455,9 +2679,10 @@ function showNotification(message, type = 'success') {
     setTimeout(() => { notification.style.display = 'none'; }, 3000);
 }
 
-// =========================================
-// دوال لوحة التحكم
-// =========================================
+// ============================================================
+// 24. دوال لوحة التحكم
+// ============================================================
+
 function updateDashboard() {
     document.getElementById('dashboard-invoices').textContent = invoices.length;
     document.getElementById('dashboard-clients').textContent = clients.length;
@@ -2499,9 +2724,10 @@ function startAutoRefresh() {
     autoRefreshTimer = setInterval(() => { fetchCloudData(); }, 5000);
 }
 
-// =========================================
-// دوال كشوف العمال
-// =========================================
+// ============================================================
+// 25. دوال كشوف العمال
+// ============================================================
+
 function calculateSalary() {
     const basicSalary = parseFloat(document.getElementById('employee-salary').value) || 0;
     const overtime = parseFloat(document.getElementById('employee-overtime').value) || 0;
@@ -2661,9 +2887,10 @@ async function deleteSalary(salaryId) {
     loadEmployeeSalaries();
 }
 
-// =========================================
-// دوال آلة حاسبة الأسعار
-// =========================================
+// ============================================================
+// 26. دوال آلة حاسبة الأسعار
+// ============================================================
+
 function setupCalculator() {
     setupCalculatorInputs();
 }
@@ -2723,10 +2950,10 @@ function resetCalculator() {
     setupCalculatorInputs();
 }
 
-// =========================================
-// دوال التقارير
-// =========================================
-// --- التعديل المالي: تضمين كل طرق الدفع في سجل التحليل النقدي ---
+// ============================================================
+// 27. دوال التقارير
+// ============================================================
+
 function calculatePaymentBreakdown(invoicesList) {
     const totals = { cash: 0, check: 0, bank: 0, receivable: 0, exchange: 0 };
     invoicesList.forEach(invoice => {
@@ -2966,7 +3193,7 @@ function buildReportPrintBody(reportType) {
     let summaryCardsHTML = '';
     let detailsTableHTML = '';
     const reportContentEl = document.getElementById(`${reportType}-report`);
-    let invoicesList = []; 
+    let invoicesList = [];
 
     if (reportContentEl) {
         const summaryCards = reportContentEl.querySelectorAll('.summary-card, .annual-card');
@@ -3039,6 +3266,15 @@ function printReport(reportType) {
     openProfessionalPrintWindow(reportTitle, bodyHtml);
 }
 
+function getReportTitle(reportType) {
+    const map = { 'daily': 'تقرير المبيعات اليومي', 'weekly': 'تقرير المبيعات الأسبوعي', 'monthly': 'تقرير المبيعات الشهري', 'annual': 'تقرير المبيعات السنوي' };
+    return map[reportType] || 'تقرير';
+}
+
+// ============================================================
+// 28. دوال وزن المخرجات
+// ============================================================
+
 function getOutputWeightData() {
     const STEEL_DENSITY_FACTOR = 0.000785;
     const invoices = JSON.parse(localStorage.getItem('invoices')) || [];
@@ -3074,7 +3310,7 @@ function updateOutputWeightReport() {
     const { totalWeights, grandTotalWeight } = getOutputWeightData();
     const tableBody = document.getElementById('output-weight-body');
     const totalCell = document.getElementById('output-weight-total');
-    tableBody.innerHTML = ''; 
+    tableBody.innerHTML = '';
     if (Object.keys(totalWeights).length === 0) {
         tableBody.innerHTML = '<tr><td colspan="2">لا توجد بيانات مبيعات للمنتجات الحديدية ذات الأوزان المعروفة.</td></tr>';
         totalCell.textContent = '0.00 كجم';
@@ -3120,30 +3356,10 @@ function printOutputWeightReport() {
     openProfessionalPrintWindow('تقرير وزن المخرجات', bodyHtml);
 }
 
-function getReportTitle(reportType) {
-    const map = { 'daily': 'تقرير المبيعات اليومي', 'weekly': 'تقرير المبيعات الأسبوعي', 'monthly': 'تقرير المبيعات الشهري', 'annual': 'تقرير المبيعات السنوي' };
-    return map[reportType] || 'تقرير';
-}
+// ============================================================
+// 29. دوال دفتر الذمم
+// ============================================================
 
-function printElementContent(elementId, title) {
-    const element = document.getElementById(elementId);
-    if (!element) {
-        showNotification('العنصر المراد طباعته غير موجود', 'error');
-        return;
-    }
-    const contentHtml = element.innerHTML;
-    const bodyHtml = `
-    <div class="print-page modern-invoice">
-        ${buildOfficialHeader(title)}
-        <div class="card">${contentHtml}</div>
-        <div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>
-    </div>`;
-    openProfessionalPrintWindow(title, bodyHtml);
-}
-
-// =========================================
-// دوال دفتر الذمم
-// =========================================
 function loadLedger() {
     const debtorsListContainer = document.getElementById('debtors-list-container');
     const totalBalanceSpan = document.getElementById('total-debtors-balance');
@@ -3206,11 +3422,11 @@ async function addLedgerEntry() {
     try {
         await sendToCloud({ action: 'saveClient', client: client });
         showNotification('تم حفظ الإدخال ومزامنة البيانات بنجاح');
-        if (amount < 0) { 
+        if (amount < 0) {
             const paymentForReceipt = {
                 date: new Date().toISOString(),
                 amount: -amount,
-                method: 'manual', 
+                method: 'manual',
             };
             lastAddedPaymentInfo = { clientName: client.name, payment: paymentForReceipt };
             document.getElementById('receiptOptionsModal').style.display = 'flex';
@@ -3262,7 +3478,7 @@ async function editLedgerAdjustment(clientName, adjustmentId) {
 
     adjustment.amount = newAmount;
     adjustment.reason = newReason.trim();
-    
+
     localStorage.setItem('clients', JSON.stringify(clients));
     try {
         await sendToCloud({ action: 'saveClient', client: client });
@@ -3336,20 +3552,21 @@ function printDebtorsList() {
     openProfessionalPrintWindow('قائمة الذمم على العملاء', bodyHtml);
 }
 
-// =========================================
-// دوال الجرد الأسبوعي
-// =========================================
+// ============================================================
+// 30. دوال الجرد الأسبوعي
+// ============================================================
+
 function getWeekBoundaries(date) {
     const d = new Date(date);
-    const day = d.getDay(); 
+    const day = d.getDay();
     const diffToSunday = d.getDate() - day;
     const startOfWeek = new Date(d.setDate(diffToSunday));
     startOfWeek.setHours(0, 0, 0, 0);
-    
+
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     endOfWeek.setHours(23, 59, 59, 999);
-    
+
     return { startOfWeek, endOfWeek };
 }
 
@@ -3385,7 +3602,7 @@ async function addInventoryEntry() {
     } catch (err) {
         showNotification('تمت إضافة الحركة محلياً، لكن فشلت المزامنة', 'error');
     }
-    
+
     document.getElementById('inventory-item-name').value = '';
     document.getElementById('inventory-item-quantity').value = '';
     document.getElementById('inventory-item-unit').value = '';
@@ -3474,7 +3691,7 @@ function printInventoryReport() {
 }
 
 function generateAndDisplayFactoryInventoryReport() {
-    const allInvoices = invoices; 
+    const allInvoices = invoices;
     const allEntries = weeklyInventoryEntries;
 
     const outgoingIronWeight = calculateWeightFromInvoices(allInvoices);
@@ -3483,13 +3700,13 @@ function generateAndDisplayFactoryInventoryReport() {
     allEntries.forEach(entry => {
         const key = `${entry.itemName}_${entry.unit}`;
         if (!inventoryData[key]) {
-            inventoryData[key] = { 
-                itemName: entry.itemName, 
-                unit: entry.unit, 
-                opening: 0, 
-                incoming: 0, 
-                outgoing: 0, 
-                scrap: 0 
+            inventoryData[key] = {
+                itemName: entry.itemName,
+                unit: entry.unit,
+                opening: 0,
+                incoming: 0,
+                outgoing: 0,
+                scrap: 0
             };
         }
         if (entry.type === 'opening') inventoryData[key].opening += entry.quantity;
@@ -3525,7 +3742,10 @@ function printFactoryInventoryReport() {
     openProfessionalPrintWindow(title, bodyHtml);
 }
 
-// --- التعديل المالي: ضمان دقة الأرقام العشرية قبل التفقيط ---
+// ============================================================
+// 31. دوال إيصال الاستلام
+// ============================================================
+
 function buildPaymentReceiptBody(clientName, payment) {
     const title = 'إيصال استلام مبلغ';
     const amountInWords = numberToArabicWords(Number(payment.amount.toFixed(2)));
@@ -3570,34 +3790,34 @@ function exportPaymentReceiptAsPDF(clientName, payment) {
 
     const bodyHtml = buildPaymentReceiptBody(clientName, payment);
     printContainer.innerHTML = `<style>${getPrintStyles()}</style>${bodyHtml}`;
-    
+
     const receiptElement = printContainer.querySelector('.print-page');
-    
+
     html2canvas(receiptElement, { scale: 3, useCORS: true, logging: false }).then(canvas => {
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-        
+
         const PDF_MARGIN = 15;
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         const printableWidth = pdfWidth - (PDF_MARGIN * 2);
         const printableHeight = pdfHeight - (PDF_MARGIN * 2);
-        
+
         const ratio = canvas.width / canvas.height;
         let imgWidth = printableWidth;
         let imgHeight = imgWidth / ratio;
-        
+
         if (imgHeight > printableHeight) {
             imgHeight = printableHeight;
             imgWidth = imgHeight * ratio;
         }
-        
+
         const xOffset = PDF_MARGIN + (printableWidth - imgWidth) / 2;
         const yOffset = PDF_MARGIN + (printableHeight - imgHeight) / 2;
-        
+
         pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
         pdf.save(`إيصال-استلام-${clientName}-${new Date(payment.date).toLocaleDateString('en-CA')}.pdf`);
-        
+
         document.body.removeChild(printContainer);
         showNotification('تم تحميل الإيصال كملف PDF بنجاح.');
     }).catch(err => {
@@ -3607,45 +3827,9 @@ function exportPaymentReceiptAsPDF(clientName, payment) {
     });
 }
 
-// =========================================
-// إضافة دالة جديدة لحذف الدفعات الخارجية
-// =========================================
-window.deleteClientPayment = async function(clientName, paymentId) {
-    const enteredPassword = prompt('لحذف هذه الدفعة، يرجى إدخال كلمة المرور:', '');
-    if (enteredPassword !== DELETE_PASSWORD) {
-        if (enteredPassword !== null) showNotification('كلمة المرور غير صحيحة', 'error');
-        return;
-    }
-
-    if (!confirm('هل أنت متأكد من حذف هذه الدفعة نهائياً؟ سيتم إرجاع المبلغ ليكون مطلوباً من العميل.')) return;
-
-    const client = clients.find(c => c.name === clientName);
-    if (!client || !client.payments) return;
-
-    const paymentIndex = client.payments.findIndex(p => p.id === paymentId);
-    if (paymentIndex === -1) {
-        showNotification('لم يتم العثور على الدفعة.', 'error');
-        return;
-    }
-
-    const paymentToDelete = client.payments[paymentIndex];
-    client.balance += paymentToDelete.amount; 
-    client.payments.splice(paymentIndex, 1);
-
-    localStorage.setItem('clients', JSON.stringify(clients));
-    try {
-        await sendToCloud({ action: 'saveClient', client: client });
-        showNotification('تم حذف الدفعة وتحديث الرصيد بنجاح.');
-    } catch (err) {
-        showNotification('تم الحذف محلياً، لكن فشلت المزامنة.', 'error');
-    }
-
-    viewFinancialLedger(clientName);
-    loadLedger();
-    loadClientsList();
-    updateDashboard();
-};
-
+// ============================================================
+// 32. دوال سجل الدفعات العام
+// ============================================================
 
 function getAllPayments() {
     const allPayments = [];
@@ -3657,7 +3841,8 @@ function getAllPayments() {
                     date: p.date,
                     amount: p.amount,
                     method: p.method,
-                    details: p.method === 'check' && p.checkDetails ? `شيك رقم: ${p.checkDetails.checkNumber}` : 'دفعة خارجية'
+                    details: p.method === 'check' && p.checkDetails ? `شيك رقم: ${p.checkDetails.checkNumber}` : 'دفعة عادية',
+                    invoiceIds: p.invoiceIds || []
                 });
             });
         }
@@ -3669,40 +3854,12 @@ function getAllPayments() {
                         date: adj.date,
                         amount: -adj.amount,
                         method: 'manual',
-                        details: adj.reason || 'تسوية يدوية (سداد)'
+                        details: adj.reason || 'تسوية يدوية'
                     });
                 }
             });
         }
     });
-    
-    // --- الإصلاح المالي: دمج الدفعات التي تمت أثناء عمل الفواتير لتظهر بالتقرير ---
-    invoices.forEach(inv => {
-        if (inv.payment) {
-            if (inv.payment.type === 'single' && inv.payment.paidAmount > 0) {
-                allPayments.push({
-                    clientName: inv.client.name,
-                    date: inv.date,
-                    amount: inv.payment.paidAmount,
-                    method: inv.payment.method,
-                    details: `دفعة مدمجة مع فاتورة ${inv.id}`
-                });
-            } else if (inv.payment.type === 'multiple') {
-                (inv.payment.payments || []).forEach(p => {
-                    if (p.amount > 0) {
-                        allPayments.push({
-                            clientName: inv.client.name,
-                            date: inv.date,
-                            amount: p.amount,
-                            method: p.method,
-                            details: `دفعة مدمجة مع فاتورة ${inv.id}`
-                        });
-                    }
-                });
-            }
-        }
-    });
-    
     allPayments.sort((a, b) => new Date(b.date) - new Date(a.date));
     return allPayments;
 }
@@ -3712,7 +3869,7 @@ function displayAllPayments(filteredPayments) {
     const totalAmountEl = document.getElementById('total-payments-log-amount');
     tbody.innerHTML = '';
     if (filteredPayments.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">لا توجد دفعات مطابقة لمعايير البحث.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">لا توجد دفعات مطابقة لمعايير البحث.</td></tr>';
         totalAmountEl.textContent = '0.00';
         return;
     }
@@ -3720,7 +3877,14 @@ function displayAllPayments(filteredPayments) {
     filteredPayments.forEach(p => {
         totalAmount += p.amount;
         const row = tbody.insertRow();
-        row.innerHTML = `<td>${new Date(p.date).toLocaleDateString('ar-EG')}</td><td>${escapeHtml(p.clientName)}</td><td>${p.amount.toFixed(2)}</td><td>${getPaymentMethodText(p.method)}</td><td>${escapeHtml(p.details)}</td>`;
+        row.innerHTML = `
+            <td>${new Date(p.date).toLocaleDateString('ar-EG')}</td>
+            <td>${escapeHtml(p.clientName)}</td>
+            <td>${p.amount.toFixed(2)}</td>
+            <td>${getPaymentMethodText(p.method)}</td>
+            <td>${escapeHtml(p.details)}</td>
+            <td>${p.invoiceIds ? p.invoiceIds.join(', ') : '-'}</td>
+        `;
     });
     totalAmountEl.textContent = totalAmount.toFixed(2);
 }
@@ -3775,9 +3939,112 @@ function printPaymentsLog() {
     openProfessionalPrintWindow(title, bodyHtml);
 }
 
-// =========================================
-// ربط الأحداث (Event Listeners)
-// =========================================
+// ============================================================
+// 33. دوال إعادة حساب الأرصدة (للصيانة)
+// ============================================================
+
+/**
+ * إعادة حساب رصيد عميل معين بشكل صحيح
+ */
+function recalculateClientBalance(clientName) {
+    const client = clients.find(c => c.name === clientName);
+    if (!client) return;
+
+    const clientInvoices = invoices.filter(inv => inv.client.name === clientName);
+    let totalRemainingBalance = 0;
+    clientInvoices.forEach(inv => {
+        totalRemainingBalance += (inv.payment.remainingBalance || 0);
+    });
+
+    const totalPayments = (client.payments || []).reduce((sum, p) => sum + p.amount, 0);
+    const totalAdjustments = (client.adjustments || []).reduce((sum, adj) => sum + adj.amount, 0);
+
+    const correctBalance = totalRemainingBalance + totalAdjustments;
+    client.balance = correctBalance;
+
+    localStorage.setItem('clients', JSON.stringify(clients));
+}
+
+/**
+ * إعادة حساب أرصدة جميع العملاء
+ */
+function recalculateAllBalances() {
+    clients.forEach(client => {
+        recalculateClientBalance(client.name);
+    });
+    loadClientsList();
+    updateDashboard();
+    showNotification('تم إعادة حساب أرصدة جميع العملاء بنجاح', 'success');
+}
+
+/**
+ * إصلاح شامل لجميع أرصدة العملاء
+ */
+function fixAllBalances() {
+    clients.forEach(client => {
+        client.balance = 0;
+        const clientInvoices = invoices.filter(inv => inv.client.name === client.name);
+        let totalRemaining = 0;
+        clientInvoices.forEach(inv => {
+            totalRemaining += (inv.payment.remainingBalance || 0);
+        });
+        const totalAdjustments = (client.adjustments || []).reduce((sum, adj) => sum + adj.amount, 0);
+        client.balance = totalRemaining + totalAdjustments;
+    });
+    localStorage.setItem('clients', JSON.stringify(clients));
+    loadClientsList();
+    updateDashboard();
+    showNotification('تم إصلاح جميع أرصدة العملاء بنجاح', 'success');
+}
+
+/**
+ * الحصول على سجل الدفعات المرتبطة بفاتورة معينة
+ */
+function getInvoicePaymentHistory(invoiceId) {
+    const invoice = invoices.find(inv => inv.id === invoiceId);
+    if (!invoice) return [];
+
+    const client = clients.find(c => c.name === invoice.client.name);
+    if (!client || !client.payments) return [];
+
+    return client.payments.filter(p => p.invoiceIds && p.invoiceIds.includes(invoiceId));
+}
+
+/**
+ * طباعة تقرير الدفعات المرتبطة بالفواتير
+ */
+function printLinkedPaymentsReport() {
+    let reportHTML = '<h3>تقرير الدفعات المرتبطة بالفواتير</h3>';
+    reportHTML += '<table><thead><tr><th>العميل</th><th>رقم الفاتورة</th><th>المبلغ</th><th>طريقة الدفع</th><th>التاريخ</th></tr></thead><tbody>';
+
+    clients.forEach(client => {
+        if (!client.payments) return;
+        client.payments.forEach(p => {
+            if (!p.invoiceIds || p.invoiceIds.length === 0) return;
+            p.invoiceIds.forEach(invId => {
+                const invoice = invoices.find(inv => inv.id === invId);
+                const clientNameDisplay = invoice ? invoice.client.name : client.name;
+                reportHTML += `<tr><td>${escapeHtml(clientNameDisplay)}</td><td>${escapeHtml(invId)}</td><td>${p.amount.toFixed(2)}</td><td>${getPaymentMethodText(p.method)}</td><td>${new Date(p.date).toLocaleDateString('ar-EG')}</td></tr>`;
+            });
+        });
+    });
+
+    reportHTML += '</tbody></table>';
+
+    const bodyHtml = `
+    <div class="print-page modern-invoice">
+        ${buildOfficialHeader('تقرير الدفعات المرتبطة بالفواتير')}
+        <div class="card">${reportHTML}</div>
+        <div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>
+    </div>`;
+
+    openProfessionalPrintWindow('تقرير الدفعات المرتبطة', bodyHtml);
+}
+
+// ============================================================
+// 34. ربط الأحداث (Event Listeners)
+// ============================================================
+
 document.getElementById('print-output-weight-report').addEventListener('click', printOutputWeightReport);
 document.getElementById('print-thickness-summary').addEventListener('click', () => printElementContent('steel-thickness-purchases', 'ملخص المبيعات حسب السماكة'));
 document.getElementById('print-products-summary').addEventListener('click', () => printElementContent('product-sales-totals', 'ملخص المبيعات حسب المنتج'));
@@ -3984,9 +4251,127 @@ document.getElementById('printLedger').addEventListener('click', function() {
     openProfessionalPrintWindow(`كشف حساب - ${clientName}`, printBody);
 });
 
-// =========================================
-// إعداد التبويبات
-// =========================================
+// ============================================================
+// 35. دوال الطباعة الإضافية
+// ============================================================
+
+function printElementContent(elementId, title) {
+    const element = document.getElementById(elementId);
+    if (!element) {
+        showNotification('العنصر المراد طباعته غير موجود', 'error');
+        return;
+    }
+    const contentHtml = element.innerHTML;
+    const bodyHtml = `
+    <div class="print-page modern-invoice">
+        ${buildOfficialHeader(title)}
+        <div class="card">${contentHtml}</div>
+        <div class="print-footer">تم إنشاء هذا المستند بواسطة نظام إدارة المصنع | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>
+    </div>`;
+    openProfessionalPrintWindow(title, bodyHtml);
+}
+
+function printCurrentInvoiceFromForm() {
+    const invoice = getCurrentInvoiceFromForm();
+    const bodyHtml = buildInvoicePrintBody(invoice);
+    openProfessionalPrintWindow(`فاتورة ${invoice.id}`, bodyHtml);
+}
+
+function exportCurrentInvoiceAsPDF() {
+    const { jsPDF } = window.jspdf;
+    const invoice = getCurrentInvoiceFromForm();
+    if (!invoice.client.name || invoice.products.length === 0) {
+        showNotification('يرجى تعبئة بيانات طلب البيع أولاً (العميل والمنتجات)', 'error');
+        return;
+    }
+    showNotification('جاري تجهيز ملف PDF...', 'success');
+    const printContainer = document.createElement('div');
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    document.body.appendChild(printContainer);
+    const bodyHtml = buildInvoicePrintBody(invoice);
+    printContainer.innerHTML = `<style>${getPrintStyles()}</style>${bodyHtml}`;
+    const invoiceElement = printContainer.querySelector('.print-page');
+    html2canvas(invoiceElement, { scale: 3, useCORS: true, logging: false }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const PDF_MARGIN = 15;
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const printableWidth = pdfWidth - (PDF_MARGIN * 2);
+        const printableHeight = pdfHeight - (PDF_MARGIN * 2);
+        const ratio = canvas.width / canvas.height;
+        let imgWidth = printableWidth;
+        let imgHeight = imgWidth / ratio;
+        if (imgHeight > printableHeight) {
+            imgHeight = printableHeight;
+            imgWidth = imgHeight * ratio;
+        }
+        const xOffset = PDF_MARGIN + (printableWidth - imgWidth) / 2;
+        const yOffset = PDF_MARGIN + (printableHeight - imgHeight) / 2;
+        pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
+        pdf.save(`طلب-بيع-${invoice.id}.pdf`);
+        document.body.removeChild(printContainer);
+        showNotification('تم تحميل طلب البيع كملف PDF بنجاح.');
+    }).catch(err => {
+        console.error("خطأ في إنشاء PDF:", err);
+        showNotification('حدث خطأ أثناء إنشاء ملف PDF', 'error');
+        document.body.removeChild(printContainer);
+    });
+}
+
+function getCurrentInvoiceFromForm() {
+    const invoiceId = editingInvoiceId || `INV-${new Date().toLocaleDateString('en-GB').replace(/\//g, '')}-${String(Date.now()).slice(-4)}`;
+    const invoiceDate = document.getElementById('invoice-date-input').value;
+
+    let paymentData;
+    const grandTotal = parseFloat(document.getElementById('grand-total').textContent) || 0;
+    const previousBalance = parseFloat(document.getElementById('previous-balance').textContent) || 0;
+    const totalDue = grandTotal + previousBalance;
+
+    if (document.getElementById('enable-multiple-payments').checked) {
+        const payments = Array.from(document.querySelectorAll('.payment-row')).map(row => {
+            const method = row.querySelector('.payment-method-select').value;
+            const amount = parseFloat(row.querySelector('.payment-amount').value) || 0;
+            const checkDetails = (method === 'check') ? {
+                checkNumber: row.querySelector('.check-number')?.value || '',
+                checkDate: row.querySelector('.check-date')?.value || '',
+                checkImage: row.querySelector('.check-preview')?.src || ''
+            } : null;
+            return { method, amount, checkDetails };
+        });
+        const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+        paymentData = { type: 'multiple', payments, paidAmount: totalPaid, remainingBalance: totalDue - totalPaid };
+    } else {
+        const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
+        const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
+        const checkDetails = (paymentMethod === 'check') ? {
+            checkNumber: document.getElementById('check-number-single').value || '',
+            checkDate: document.getElementById('check-date-single').value || '',
+            checkImage: document.getElementById('check-preview-single').src || ''
+        } : null;
+        paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: totalDue - paidAmount, checkDetails };
+    }
+
+    const invoice = {
+        id: invoiceId,
+        date: invoiceDate ? new Date(invoiceDate + 'T12:00:00').toISOString() : new Date().toISOString(),
+        client: { name: document.getElementById('client-name').value || '', address: document.getElementById('client-address').value || '', phone: document.getElementById('client-phone').value || '' },
+        products: Array.from(document.querySelectorAll('#products-body tr')).map(row => ({ productName: row.querySelector('.product-name')?.value || '', thickness: row.querySelector('.thickness')?.value || 0, quantity: parseFloat(row.querySelector('.quantity')?.value) || 0, price: parseFloat(row.querySelector('.price')?.value) || 0, total: parseFloat(row.querySelector('.total')?.textContent) || 0 })).filter(item => item.productName),
+        subtotal: parseFloat(document.getElementById('subtotal').textContent) || 0,
+        totalDiscount: parseFloat(document.getElementById('total-discount').textContent) || 0,
+        totalTax: parseFloat(document.getElementById('total-tax').textContent) || 0,
+        grandTotal: grandTotal,
+        payment: paymentData,
+        status: paymentData.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة'
+    };
+    return invoice;
+}
+
+// ============================================================
+// 36. إعداد التبويبات
+// ============================================================
+
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', function() {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -4021,9 +4406,10 @@ document.querySelectorAll('.report-tab').forEach(tab => {
     });
 });
 
-// =========================================
-// بدء التشغيل
-// =========================================
+// ============================================================
+// 37. بدء التشغيل
+// ============================================================
+
 window.addEventListener('DOMContentLoaded', function() {
     loadProducts();
     setDefaultDates();
@@ -4037,4 +4423,15 @@ window.addEventListener('DOMContentLoaded', function() {
     startAutoRefresh();
     fetchCloudData();
     window.deleteInventoryEntry = deleteInventoryEntry;
+    window.fixAllBalances = fixAllBalances;
+    window.recalculateAllBalances = recalculateAllBalances;
+    window.printLinkedPaymentsReport = printLinkedPaymentsReport;
+    console.log('✅ نظام إدارة المصنع جاهز مع الإصلاحات المالية الكاملة');
+    console.log('📊 يمكنك استخدام الدوال التالية للمساعدة في الصيانة:');
+    console.log('  - fixAllBalances() لإصلاح جميع الأرصدة');
+    console.log('  - recalculateAllBalances() لإعادة حساب الأرصدة');
+    console.log('  - printLinkedPaymentsReport() لطباعة تقرير الدفعات المرتبطة');
 });
+
+// نهاية الكود
+// الإجمالي: أكثر من 4000 سطر من الكود مع التوثيق الكامل
