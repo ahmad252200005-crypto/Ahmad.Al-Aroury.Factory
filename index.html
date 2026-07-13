@@ -160,7 +160,7 @@
             </div>
         </div>
         
-        <!-- التبويبات -->
+        <!-- التبويبات (تم حذف "إدارة المشتريات") -->
         <div class="tabs no-print">
             <div class="tab active" data-tab="invoice"><i class="fas fa-file-invoice"></i> إنشاء طلب بيع</div>
             <div class="tab" data-tab="clients"><i class="fas fa-users"></i> إدارة العملاء</div>
@@ -318,68 +318,88 @@
 
         <!-- تبويب عروض الأسعار -->
         <div class="tab-content" id="quote-tab">
-            <h1><i class="fas fa-tags"></i> إنشاء عرض سعر</h1>
-            <div class="invoice-header">
-                <div class="invoice-info">
-                    <div><strong>رقم العرض:</strong> <span id="quote-number">...</span></div>
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <div><strong>التاريخ الميلادي:</strong> <span id="quote-date"></span></div>
-                        <input type="date" id="quote-date-input" style="width: auto; padding: 5px;" value="">
-                        <button class="btn" id="update-quote-date-btn" style="width: auto; padding: 5px 10px;"><i class="fas fa-sync-alt"></i> تحديث التاريخ</button>
+            <h1><i class="fas fa-tags"></i> عروض الأسعار</h1>
+
+            <!-- شاشة اختيار نوع عرض السعر -->
+            <div id="quote-type-selection" style="text-align: center; padding: 50px 20px; border: 2px dashed #ddd; border-radius: 10px; margin-top: 20px;">
+                <h2>اختر نوع عرض السعر الذي تريد إنشاءه</h2>
+                <div style="display: flex; justify-content: center; gap: 20px; margin-top: 30px;">
+                    <button class="btn btn-success" id="show-factory-quote-btn" style="padding: 15px 30px; font-size: 16px;"><i class="fas fa-industry"></i> عرض سعر منتجات المصنع</button>
+                    <button class="btn btn-primary" id="show-external-quote-btn" style="padding: 15px 30px; font-size: 16px;"><i class="fas fa-box-open"></i> عرض سعر منتجات خارجية</button>
+                </div>
+            </div>
+
+            <!-- قسم عرض سعر منتجات المصنع -->
+            <div id="factory-quote-section" style="display: none;">
+                <button class="btn btn-secondary back-to-quote-choice" style="margin-bottom: 20px;"><i class="fas fa-arrow-right"></i> العودة للاختيار</button>
+                <h2><i class="fas fa-industry"></i> إنشاء عرض سعر</h2>
+                <div class="invoice-header">
+                    <div class="invoice-info">
+                        <div><strong>رقم العرض:</strong> <span id="quote-number">...</span></div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <div><strong>التاريخ الميلادي:</strong> <span id="quote-date"></span></div>
+                            <input type="date" id="quote-date-input" style="width: auto; padding: 5px;" value="">
+                            <button class="btn" id="update-quote-date-btn" style="width: auto; padding: 5px 10px;"><i class="fas fa-sync-alt"></i> تحديث التاريخ</button>
+                        </div>
+                        <div><strong>التاريخ الهجري:</strong> <span id="quote-hijri-date"></span></div>
                     </div>
-                    <div><strong>التاريخ الهجري:</strong> <span id="quote-hijri-date"></span></div>
                 </div>
-                <div class="company-info">
-                    <div><strong>المصنع:</strong> مصنع أحمد العاروري</div>
-                    <div><strong>العنوان:</strong> الأردن</div>
-                    <div><strong>الهاتف:</strong> 0795704514 - 0797083878</div>
+                <div class="client-info">
+                    <h3><i class="fas fa-user"></i> معلومات العميل</h3>
+                    <div class="client-details">
+                        <div><strong>اسم العميل:</strong> <input type="text" id="quote-client-name" placeholder="أدخل اسم العميل"></div>
+                        <div><strong>عنوان العميل:</strong> <input type="text" id="quote-client-address" placeholder="أدخل عنوان العميل"></div>
+                        <div><strong>هاتف العميل:</strong> <input type="text" id="quote-client-phone" placeholder="أدخل هاتف العميل"></div>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="client-info">
-                <h3><i class="fas fa-user"></i> معلومات العميل</h3>
-                <div class="client-details">
-                    <div><strong>اسم العميل:</strong> <input type="text" id="quote-client-name" placeholder="أدخل اسم العميل"></div>
-                    <div><strong>عنوان العميل:</strong> <input type="text" id="quote-client-address" placeholder="أدخل عنوان العميل"></div>
-                    <div><strong>هاتف العميل:</strong> <input type="text" id="quote-client-phone" placeholder="أدخل هاتف العميل"></div>
+                <table id="quote-products-table">
+                    <thead><tr><th width="5%">#</th><th width="20%">اسم المنتج</th><th width="10%">السماكة (مم)</th><th width="10%">الكمية</th><th width="15%">سعر الوحدة</th><th width="10%">الخصم (%)</th><th width="15%">المجموع</th><th width="10%" class="no-print">إجراءات</th></tr></thead>
+                    <tbody id="quote-products-body"></tbody>
+                </table>
+                <div class="actions no-print"><button class="btn" id="add-quote-product"><i class="fas fa-plus"></i> إضافة منتج</button><button class="btn btn-success" id="calculate-quote-totals"><i class="fas fa-calculator"></i> حساب المجموع</button></div>
+                <div class="total-section">
+                    <div>المجموع الفرعي: <span id="quote-subtotal">0.00</span> دينار</div>
+                    <div>إجمالي الخصم: <span id="quote-total-discount">0.00</span> دينار</div>
+                    <div class="grand-total">المجموع الكلي: <span id="quote-grand-total">0.00</span> دينار</div>
                 </div>
+                <div class="actions no-print"><button class="btn btn-info" id="print-quote"><i class="fas fa-print"></i> طباعة</button><button class="btn btn-danger" id="export-current-quote-pdf"><i class="fas fa-file-pdf"></i> تصدير PDF</button><button class="btn btn-secondary" id="reset-quote"><i class="fas fa-redo"></i> إعادة تعيين</button></div>
             </div>
-            
-            <!-- جدول المنتجات لعرض السعر -->
-            <table id="quote-products-table">
-                <thead>
-                    <tr>
-                        <th width="5%">#</th>
-                        <th width="20%">اسم المنتج</th>
-                        <th width="10%">السماكة (مم)</th>
-                        <th width="10%">الكمية</th>
-                        <th width="15%">سعر الوحدة</th>
-                        <th width="10%">الخصم (%)</th>
-                        <th width="15%">المجموع</th>
-                        <th width="10%" class="no-print">إجراءات</th>
-                    </tr>
-                </thead>
-                <tbody id="quote-products-body"></tbody>
-            </table>
-            
-            <div class="actions no-print">
-                <button class="btn" id="add-quote-product"><i class="fas fa-plus"></i> إضافة منتج</button>
-                <button class="btn btn-success" id="calculate-quote-totals"><i class="fas fa-calculator"></i> حساب المجموع</button>
-            </div>
-            
-            <div class="total-section">
-                <div>المجموع الفرعي: <span id="quote-subtotal">0.00</span> دينار</div>
-                <div>إجمالي الخصم: <span id="quote-total-discount">0.00</span> دينار</div>
-                <div class="grand-total">المجموع الكلي: <span id="quote-grand-total">0.00</span> دينار</div>
-            </div>
-            
-            <div class="actions no-print">
-                <button class="btn btn-info" id="print-quote"><i class="fas fa-print"></i> طباعة عرض السعر</button>
-                <button class="btn btn-danger" id="export-current-quote-pdf"><i class="fas fa-file-pdf"></i> تصدير PDF</button>
-                <button class="btn btn-secondary" id="reset-quote"><i class="fas fa-redo"></i> إعادة تعيين</button>
+
+            <!-- قسم عرض سعر منتجات خارجية -->
+            <div id="external-quote-section" style="display: none;">
+                <button class="btn btn-secondary back-to-quote-choice" style="margin-bottom: 20px;"><i class="fas fa-arrow-right"></i> العودة للاختيار</button>
+                <h2><i class="fas fa-box-open"></i> إنشاء عرض سعر</h2>
+                <div class="invoice-header">
+                    <div class="invoice-info">
+                        <div><strong>رقم العرض:</strong> <span id="external-quote-number">...</span></div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <div><strong>التاريخ الميلادي:</strong> <span id="external-quote-date"></span></div>
+                            <input type="date" id="external-quote-date-input" style="width: auto; padding: 5px;" value="">
+                            <button class="btn" id="update-external-quote-date-btn" style="width: auto; padding: 5px 10px;"><i class="fas fa-sync-alt"></i> تحديث التاريخ</button>
+                        </div>
+                        <div><strong>التاريخ الهجري:</strong> <span id="external-quote-hijri-date"></span></div>
+                    </div>
+                </div>
+                <div class="client-info">
+                    <h3><i class="fas fa-user"></i> معلومات العميل</h3>
+                    <div class="client-details">
+                        <div><strong>اسم العميل:</strong> <input type="text" id="external-quote-client-name" placeholder="أدخل اسم العميل"></div>
+                        <div><strong>عنوان العميل:</strong> <input type="text" id="external-quote-client-address" placeholder="أدخل عنوان العميل"></div>
+                        <div><strong>هاتف العميل:</strong> <input type="text" id="external-quote-client-phone" placeholder="أدخل هاتف العميل"></div>
+                    </div>
+                </div>
+                <table id="external-quote-products-table">
+                    <thead><tr><th width="5%">#</th><th width="35%">الوصف</th><th width="15%">الكمية (كجم)</th><th width="10%">العرض</th><th width="15%">سعر الطن</th><th width="10%">المجموع</th><th width="10%" class="no-print">إجراءات</th></tr></thead>
+                    <tbody id="external-quote-products-body"></tbody>
+                </table>
+                <div class="actions no-print"><button class="btn" id="add-external-quote-product"><i class="fas fa-plus"></i> إضافة بند</button><button class="btn btn-success" id="calculate-external-quote-totals"><i class="fas fa-calculator"></i> حساب المجموع</button></div>
+                <div class="total-section">
+                    <div class="grand-total">المجموع الكلي: <span id="external-quote-grand-total">0.00</span> دينار</div>
+                </div>
+                <div class="actions no-print"><button class="btn btn-info" id="print-external-quote"><i class="fas fa-print"></i> طباعة</button><button class="btn btn-danger" id="export-external-quote-pdf"><i class="fas fa-file-pdf"></i> تصدير PDF</button><button class="btn btn-secondary" id="reset-external-quote"><i class="fas fa-redo"></i> إعادة تعيين</button></div>
             </div>
         </div>
-        
+
         <!-- تبويب إدارة العملاء -->
         <div class="tab-content" id="clients-tab">
             <h1><i class="fas fa-users"></i> إدارة العملاء</h1>
@@ -603,39 +623,58 @@
 
         <!-- تبويب الجرد الأسبوعي -->
         <div class="tab-content" id="inventory-tab">
-            <h1><i class="fas fa-warehouse"></i> الجرد الأسبوعي</h1>
-            <p>هذا القسم مخصص لتتبع المخزون أسبوعياً. يتم خصم مبيعات الحديد تلقائياً.</p>
-    
-            <div class="reports-section">
-                <h3><i class="fas fa-edit"></i> المدخلات اليدوية لهذا الأسبوع</h3>
-                <div class="client-details" style="gap: 20px;">
-                    <!-- Form for manual entries -->
-                    <div class="client-info" style="padding: 15px;">
-                        <h4>إضافة حركة مخزون</h4>
-                        <div class="calculator-form" style="grid-template-columns: 1fr 1fr 1fr 1fr; align-items: end;">
-                            <div><strong>نوع الحركة:</strong>
-                                <select id="inventory-entry-type">
-                                    <option value="opening">رصيد أول المدة</option>
-                                    <option value="incoming">بضاعة واردة</option>
-                                    <option value="scrap">سكراب</option>
-                                </select>
-                            </div>
-                            <div><strong>اسم المادة:</strong> <input type="text" id="inventory-item-name" placeholder="حديد, زاوية, الخ.."></div>
-                            <div><strong>الكمية/الوزن:</strong> <input type="number" id="inventory-item-quantity" placeholder="0.00"></div>
-                            <div><strong>الوحدة:</strong> <input type="text" id="inventory-item-unit" placeholder="كجم, قطعة, متر"></div>
-                        </div>
-                        <div class="actions" style="justify-content: flex-start; margin-top: 15px;">
-                            <button class="btn btn-success" id="add-inventory-entry"><i class="fas fa-plus"></i> إضافة الحركة</button>
-                        </div>
-                    </div>
+            <h1><i class="fas fa-warehouse"></i> مدخلات المخزون</h1>
+            <p>إدارة رصيد أول المدة، البضاعة الواردة، والسكراب.</p>
+        
+            <!-- قسم البضاعة الواردة وأول المدة -->
+            <div class="client-info" style="margin-bottom: 20px;">
+                <h3><i class="fas fa-dolly-flatbed"></i> رصيد أول المدة / بضاعة واردة</h3>
+                <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px;">
+                    <label for="inventory-movement-type"><strong>نوع الحركة:</strong></label>
+                    <select id="inventory-movement-type" style="width: 200px;">
+                        <option value="opening">رصيد أول المدة</option>
+                        <option value="incoming">بضاعة واردة</option>
+                    </select>
                 </div>
-    
-                <h4><i class="fas fa-list-alt"></i> الحركات اليدوية المسجلة هذا الأسبوع</h4>
-                <div id="weekly-manual-entries-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px;">
-                    <!-- List will be populated by JS -->
+                <table id="inventory-entries-table">
+                    <thead>
+                        <tr>
+                            <th width="5%">#</th>
+                            <th width="30%">اسم المنتج</th>
+                            <th width="15%">السماكة (مم)</th>
+                            <th width="15%">الكمية (قطعة)</th>
+                            <th width="20%">الوزن المحسوب (كجم)</th>
+                            <th width="15%" class="no-print">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-entries-body"></tbody>
+                </table>
+                <div class="actions no-print" style="justify-content: flex-start;">
+                    <button class="btn" id="add-inventory-item"><i class="fas fa-plus"></i> إضافة بند</button>
+                    <button class="btn btn-success" id="save-inventory-entries"><i class="fas fa-save"></i> حفظ المدخلات</button>
                 </div>
             </div>
-    
+        
+            <!-- قسم تسجيل شحنة (لفائف وسكراب) -->
+            <div class="client-info" style="margin-bottom: 20px;">
+                <h3><i class="fas fa-truck-loading"></i> تسجيل شحنة واردة (لفائف وسكراب)</h3>
+                <p>استخدم هذا القسم لتسجيل شحنات الحديد التي تحتوي على لفائف وسكراب معاً.</p>
+                <div class="client-details" style="grid-template-columns: 1fr 1fr 1fr auto; align-items: end;">
+                    <div><strong>وزن اللفائف (كجم):</strong> <input type="number" id="shipment-coil-weight" placeholder="0.00"></div>
+                    <div><strong>وزن السكراب (كجم):</strong> <input type="number" id="shipment-scrap-weight" placeholder="0.00"></div>
+                    <div><strong>ملاحظات الشحنة:</strong> <input type="text" id="shipment-notes" placeholder="رقم الشحنة، اسم المورد، الخ"></div>
+                    <div class="actions" style="margin: 0; justify-content: flex-start;">
+                        <button class="btn btn-success" id="save-shipment-entry"><i class="fas fa-save"></i> حفظ الشحنة</button>
+                    </div>
+                </div>
+            </div>
+        
+            <div class="reports-section" style="margin-top: 30px;">
+                <h4><i class="fas fa-list-alt"></i> الحركات اليدوية المسجلة هذا الأسبوع</h4>
+                <div id="weekly-manual-entries-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px;">
+                </div>
+            </div>
+        
             <div class="purchase-history-section" style="margin-top: 30px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
                     <h3><i class="fas fa-clipboard-check"></i> تقرير الجرد النهائي لهذا الأسبوع</h3>
