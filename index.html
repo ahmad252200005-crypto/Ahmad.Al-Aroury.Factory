@@ -79,6 +79,24 @@
         </div>
     </div>
 
+    <!-- نافذة إضافة دفعة للسائق -->
+    <div class="modal" id="driverPaymentModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3 id="driver-payment-modal-title">إضافة دفعة للسائق</h3>
+            <div class="payment-form">
+                <div class="client-details" style="grid-template-columns: 1fr;">
+                    <div><strong>المبلغ:</strong> <input type="number" id="driver-payment-amount" value="0.00" min="0" step="0.01"></div>
+                    <div><strong>التاريخ:</strong> <input type="date" id="driver-payment-date"></div>
+                    <div><strong>ملاحظات:</strong> <input type="text" id="driver-payment-notes" placeholder="ملاحظات الدفعة"></div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-success" id="save-driver-payment-btn"><i class="fas fa-plus"></i> إضافة الدفعة</button>
+                <button class="btn btn-secondary" id="cancel-driver-payment-btn"><i class="fas fa-times"></i> إلغاء</button>
+            </div>
+        </div>
+    </div>
+
     <!-- نافذة إضافة/تعديل المنتجات -->
     <div class="modal" id="productModal">
         <div class="modal-content" style="max-width: 600px;">
@@ -86,7 +104,8 @@
             <div class="client-details" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
                 <div><strong>اسم المنتج:</strong> <input type="text" id="modal-product-name" placeholder="أدخل اسم المنتج الجديد أو اختر للتعديل"></div>
                 <div><strong>عرض الشريحة (سم):</strong> <input type="number" id="modal-product-width" placeholder="اختياري: لحساب الوزن تلقائياً"></div>
-                <div><strong>الطول (سم):</strong> <input type="number" id="modal-product-length" placeholder="الافتراضي 300"></div>
+                <div><strong>الطول (سم):</strong> <input type="number" id="modal-product-length" placeholder="الافتراضي 300" value="300"></div>
+                <div><strong>الوزن (كجم/مم):</strong> <input type="number" id="modal-product-weight" placeholder="يُحسب تلقائياً" readonly style="background-color: #e9ecef;" title="وزن القطعة لكل 1مم من السماكة"></div>
                 <div style="grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; background: #f0f7ff; padding: 10px; border-radius: 5px;">
                     <input type="checkbox" id="modal-product-is-steel" checked style="width: auto; height: auto;">
                     <label for="modal-product-is-steel" style="margin: 0;"><strong>منتج حديدي (يُحسب في تقرير الوزن)</strong></label>
@@ -102,7 +121,7 @@
                 <input type="text" id="modal-product-search" placeholder="ابحث في المنتجات..." style="margin-bottom: 10px;">
                 <div style="max-height: 220px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px;">
                     <table class="modal-product-table">
-                        <thead><tr><th>اسم المنتج</th><th>عرض الشريحة</th><th>الطول</th><th>النوع</th><th>إجراءات</th></tr></thead>
+                        <thead><tr><th>اسم المنتج</th><th>عرض الشريحة</th><th>الطول</th><th>الوزن (كجم/مم)</th><th>النوع</th><th>إجراءات</th></tr></thead>
                         <tbody id="modal-product-list-body"></tbody>
                     </table>
                 </div>
@@ -172,6 +191,7 @@
             <div class="tab" data-tab="ledger"><i class="fas fa-book-open"></i> دفتر الذمم</div>
             <div class="tab" data-tab="inventory"><i class="fas fa-warehouse"></i> الجرد الأسبوعي</div>
             <div class="tab" data-tab="payments-log"><i class="fas fa-cash-register"></i> سجل الدفعات</div>
+            <div class="tab" data-tab="drivers"><i class="fas fa-shipping-fast"></i> أجور السائقين</div>
             <div class="tab" data-tab="quote"><i class="fas fa-tags"></i> عروض الأسعار</div>
         </div>
         
@@ -556,10 +576,10 @@
                     <div class="report-tab" data-report="monthly"><i class="fas fa-calendar-alt"></i> التقرير الشهري</div>
                     <div class="report-tab" data-report="annual"><i class="fas fa-calendar"></i> التقرير السنوي</div>
                 </div>
-                <div class="report-content active" id="daily-report"><h3>تقرير المبيعات اليومي</h3><div class="report-summary"><div class="summary-card"><h4>إجمالي المبيعات</h4><div class="value" id="daily-total-sales">0.00 دينار</div><div class="sub-value" id="daily-invoices-count">0 طلب بيع</div></div><div class="summary-card"><h4>عدد المنتجات المباعة</h4><div class="value" id="daily-products-sold">0 منتج</div><div class="sub-value" id="daily-units-sold">0 وحدة</div></div><div class="summary-card"><h4>متوسط قيمة الطلب</h4><div class="value" id="daily-avg-invoice">0.00 دينار</div><div class="sub-value">لكل طلب</div></div><div class="summary-card"><h4>عدد العملاء</h4><div class="value" id="daily-customers-count">0 عميل</div><div class="sub-value">عملاء مختلفين</div></div><div class="summary-card"><h4>الوزن المباع</h4><div class="value" id="daily-total-weight">0.00 كجم</div><div class="sub-value">للمنتجات الحديدية</div></div><div class="summary-card"><h4>المقبوضات النقدية</h4><div class="value" id="daily-cash-received">0.00 دينار</div><div class="sub-value">من طلبات اليوم</div></div><div class="summary-card"><h4>مقبوضات الشيكات</h4><div class="value" id="daily-checks-received">0.00 دينار</div><div class="sub-value">من طلبات اليوم</div></div><div class="summary-card"><h4>مقبوضات بنكية</h4><div class="value" id="daily-bank-received">0.00 دينار</div><div class="sub-value">من طلبات اليوم</div></div></div><div class="sales-details"><h4>تفاصيل المبيعات</h4><div id="daily-sales-details"></div></div></div>
-                <div class="report-content" id="weekly-report"><h3>تقرير المبيعات الأسبوعي</h3><div class="report-summary"><div class="summary-card"><h4>إجمالي المبيعات</h4><div class="value" id="weekly-total-sales">0.00 دينار</div><div class="sub-value" id="weekly-invoices-count">0 طلب بيع</div></div><div class="summary-card"><h4>عدد المنتجات المباعة</h4><div class="value" id="weekly-products-sold">0 منتج</div><div class="sub-value" id="weekly-units-sold">0 وحدة</div></div><div class="summary-card"><h4>متوسط المبيعات اليومية</h4><div class="value" id="weekly-avg-daily">0.00 دينار</div><div class="sub-value">لكل يوم</div></div><div class="summary-card"><h4>عدد العملاء</h4><div class="value" id="weekly-customers-count">0 عميل</div><div class="sub-value">عملاء مختلفين</div></div><div class="summary-card"><h4>الوزن المباع</h4><div class="value" id="weekly-total-weight">0.00 كجم</div><div class="sub-value">للمنتجات الحديدية</div></div><div class="summary-card"><h4>المقبوضات النقدية</h4><div class="value" id="weekly-cash-received">0.00 دينار</div><div class="sub-value">من طلبات الأسبوع</div></div><div class="summary-card"><h4>مقبوضات الشيكات</h4><div class="value" id="weekly-checks-received">0.00 دينار</div><div class="sub-value">من طلبات الأسبوع</div></div><div class="summary-card"><h4>مقبوضات بنكية</h4><div class="value" id="weekly-bank-received">0.00 دينار</div><div class="sub-value">من طلبات الأسبوع</div></div></div><div class="sales-details"><h4>تفاصيل المبيعات</h4><div id="weekly-sales-details"></div></div></div>
-                <div class="report-content" id="monthly-report"><h3>تقرير المبيعات الشهري</h3><div class="report-summary"><div class="summary-card"><h4>إجمالي المبيعات</h4><div class="value" id="monthly-total-sales">0.00 دينار</div><div class="sub-value" id="monthly-invoices-count">0 طلب بيع</div></div><div class="summary-card"><h4>عدد المنتجات المباعة</h4><div class="value" id="monthly-products-sold">0 منتج</div><div class="sub-value" id="monthly-units-sold">0 وحدة</div></div><div class="summary-card"><h4>متوسط المبيعات اليومية</h4><div class="value" id="monthly-avg-daily">0.00 دينار</div><div class="sub-value">لكل يوم</div></div><div class="summary-card"><h4>عدد العملاء</h4><div class="value" id="monthly-customers-count">0 عميل</div><div class="sub-value">عملاء مختلفين</div></div><div class="summary-card"><h4>الوزن المباع</h4><div class="value" id="monthly-total-weight">0.00 كجم</div><div class="sub-value">للمنتجات الحديدية</div></div><div class="summary-card"><h4>المقبوضات النقدية</h4><div class="value" id="monthly-cash-received">0.00 دينار</div><div class="sub-value">من طلبات الشهر</div></div><div class="summary-card"><h4>مقبوضات الشيكات</h4><div class="value" id="monthly-checks-received">0.00 دينار</div><div class="sub-value">من طلبات الشهر</div></div><div class="summary-card"><h4>مقبوضات بنكية</h4><div class="value" id="monthly-bank-received">0.00 دينار</div><div class="sub-value">من طلبات الشهر</div></div></div><div class="sales-details"><h4>تفاصيل المبيعات</h4><div id="monthly-sales-details"></div></div></div>
-                <div class="report-content" id="annual-report"><h3>تقرير المبيعات السنوي</h3><div class="report-summary"><div class="summary-card"><h4>إجمالي المبيعات السنوية</h4><div class="value" id="annual-total-sales">0.00 دينار</div><div class="sub-value" id="annual-invoices-count">0 طلب بيع</div></div><div class="summary-card"><h4>أفضل شهر في المبيعات</h4><div class="value" id="best-month-sales">0.00 دينار</div><div class="sub-value" id="best-month-name">غير محدد</div></div><div class="summary-card"><h4>متوسط المبيعات الشهرية</h4><div class="value" id="monthly-avg-sales">0.00 دينار</div><div class="sub-value">لكل شهر</div></div><div class="summary-card"><h4>عدد العملاء السنوي</h4><div class="value" id="annual-customers-count">0 عميل</div><div class="sub-value">عملاء مختلفين</div></div><div class="summary-card"><h4>إجمالي الوزن المباع</h4><div class="value" id="annual-total-weight">0.00 كجم</div><div class="sub-value">للمنتجات الحديدية</div></div><div class="summary-card"><h4>المقبوضات النقدية</h4><div class="value" id="annual-cash-received">0.00 دينار</div><div class="sub-value">من طلبات السنة</div></div><div class="summary-card"><h4>مقبوضات الشيكات</h4><div class="value" id="annual-checks-received">0.00 دينار</div><div class="sub-value">من طلبات السنة</div></div><div class="summary-card"><h4>مقبوضات بنكية</h4><div class="value" id="annual-bank-received">0.00 دينار</div><div class="sub-value">من طلبات السنة</div></div></div><h4>مبيعات الشهور خلال السنة</h4><div class="monthly-chart" id="monthly-chart"></div><div class="sales-details"><h4>تفاصيل المبيعات السنوية</h4><div id="annual-sales-details"></div></div></div>
+                <div class="report-content active" id="daily-report"><h3>تقرير المبيعات اليومي</h3><div class="report-summary"><div class="summary-card"><h4>إجمالي المبيعات</h4><div class="value" id="daily-total-sales">0.00 دينار</div><div class="sub-value" id="daily-invoices-count">0 طلب بيع</div></div><div class="summary-card"><h4>عدد المنتجات المباعة</h4><div class="value" id="daily-products-sold">0 منتج</div><div class="sub-value" id="daily-units-sold">0 وحدة</div></div><div class="summary-card"><h4>متوسط قيمة الطلب</h4><div class="value" id="daily-avg-invoice">0.00 دينار</div><div class="sub-value">لكل طلب</div></div><div class="summary-card"><h4>عدد العملاء</h4><div class="value" id="daily-customers-count">0 عميل</div><div class="sub-value">عملاء مختلفين</div></div><div class="summary-card"><h4>الوزن المباع</h4><div class="value" id="daily-total-weight">0.00 كجم</div><div class="sub-value">للمنتجات الحديدية</div></div><div class="summary-card"><h4>المقبوضات النقدية</h4><div class="value" id="daily-cash-received">0.00 دينار</div><div class="sub-value">من طلبات اليوم</div></div><div class="summary-card"><h4>مقبوضات الشيكات</h4><div class="value" id="daily-checks-received">0.00 دينار</div><div class="sub-value">من طلبات اليوم</div></div><div class="summary-card"><h4>مقبوضات بنكية</h4><div class="value" id="daily-bank-received">0.00 دينار</div><div class="sub-value">من طلبات اليوم</div></div><div class="summary-card"><h4>أجور النقل</h4><div class="value" id="daily-driver-wages">0.00 دينار</div><div class="sub-value">مصاريف اليوم</div></div></div><div class="sales-details"><h4>تفاصيل المبيعات</h4><div id="daily-sales-details"></div></div></div>
+                <div class="report-content" id="weekly-report"><h3>تقرير المبيعات الأسبوعي</h3><div class="report-summary"><div class="summary-card"><h4>إجمالي المبيعات</h4><div class="value" id="weekly-total-sales">0.00 دينار</div><div class="sub-value" id="weekly-invoices-count">0 طلب بيع</div></div><div class="summary-card"><h4>عدد المنتجات المباعة</h4><div class="value" id="weekly-products-sold">0 منتج</div><div class="sub-value" id="weekly-units-sold">0 وحدة</div></div><div class="summary-card"><h4>متوسط المبيعات اليومية</h4><div class="value" id="weekly-avg-daily">0.00 دينار</div><div class="sub-value">لكل يوم</div></div><div class="summary-card"><h4>عدد العملاء</h4><div class="value" id="weekly-customers-count">0 عميل</div><div class="sub-value">عملاء مختلفين</div></div><div class="summary-card"><h4>الوزن المباع</h4><div class="value" id="weekly-total-weight">0.00 كجم</div><div class="sub-value">للمنتجات الحديدية</div></div><div class="summary-card"><h4>المقبوضات النقدية</h4><div class="value" id="weekly-cash-received">0.00 دينار</div><div class="sub-value">من طلبات الأسبوع</div></div><div class="summary-card"><h4>مقبوضات الشيكات</h4><div class="value" id="weekly-checks-received">0.00 دينار</div><div class="sub-value">من طلبات الأسبوع</div></div><div class="summary-card"><h4>مقبوضات بنكية</h4><div class="value" id="weekly-bank-received">0.00 دينار</div><div class="sub-value">من طلبات الأسبوع</div></div><div class="summary-card"><h4>أجور النقل</h4><div class="value" id="weekly-driver-wages">0.00 دينار</div><div class="sub-value">مصاريف الأسبوع</div></div></div><div class="sales-details"><h4>تفاصيل المبيعات</h4><div id="weekly-sales-details"></div></div></div>
+                <div class="report-content" id="monthly-report"><h3>تقرير المبيعات الشهري</h3><div class="report-summary"><div class="summary-card"><h4>إجمالي المبيعات</h4><div class="value" id="monthly-total-sales">0.00 دينار</div><div class="sub-value" id="monthly-invoices-count">0 طلب بيع</div></div><div class="summary-card"><h4>عدد المنتجات المباعة</h4><div class="value" id="monthly-products-sold">0 منتج</div><div class="sub-value" id="monthly-units-sold">0 وحدة</div></div><div class="summary-card"><h4>متوسط المبيعات اليومية</h4><div class="value" id="monthly-avg-daily">0.00 دينار</div><div class="sub-value">لكل يوم</div></div><div class="summary-card"><h4>عدد العملاء</h4><div class="value" id="monthly-customers-count">0 عميل</div><div class="sub-value">عملاء مختلفين</div></div><div class="summary-card"><h4>الوزن المباع</h4><div class="value" id="monthly-total-weight">0.00 كجم</div><div class="sub-value">للمنتجات الحديدية</div></div><div class="summary-card"><h4>المقبوضات النقدية</h4><div class="value" id="monthly-cash-received">0.00 دينار</div><div class="sub-value">من طلبات الشهر</div></div><div class="summary-card"><h4>مقبوضات الشيكات</h4><div class="value" id="monthly-checks-received">0.00 دينار</div><div class="sub-value">من طلبات الشهر</div></div><div class="summary-card"><h4>مقبوضات بنكية</h4><div class="value" id="monthly-bank-received">0.00 دينار</div><div class="sub-value">من طلبات الشهر</div></div><div class="summary-card"><h4>أجور النقل</h4><div class="value" id="monthly-driver-wages">0.00 دينار</div><div class="sub-value">مصاريف الشهر</div></div></div><div class="sales-details"><h4>تفاصيل المبيعات</h4><div id="monthly-sales-details"></div></div></div>
+                <div class="report-content" id="annual-report"><h3>تقرير المبيعات السنوي</h3><div class="report-summary"><div class="summary-card"><h4>إجمالي المبيعات السنوية</h4><div class="value" id="annual-total-sales">0.00 دينار</div><div class="sub-value" id="annual-invoices-count">0 طلب بيع</div></div><div class="summary-card"><h4>أفضل شهر في المبيعات</h4><div class="value" id="best-month-sales">0.00 دينار</div><div class="sub-value" id="best-month-name">غير محدد</div></div><div class="summary-card"><h4>متوسط المبيعات الشهرية</h4><div class="value" id="monthly-avg-sales">0.00 دينار</div><div class="sub-value">لكل شهر</div></div><div class="summary-card"><h4>عدد العملاء السنوي</h4><div class="value" id="annual-customers-count">0 عميل</div><div class="sub-value">عملاء مختلفين</div></div><div class="summary-card"><h4>إجمالي الوزن المباع</h4><div class="value" id="annual-total-weight">0.00 كجم</div><div class="sub-value">للمنتجات الحديدية</div></div><div class="summary-card"><h4>المقبوضات النقدية</h4><div class="value" id="annual-cash-received">0.00 دينار</div><div class="sub-value">من طلبات السنة</div></div><div class="summary-card"><h4>مقبوضات الشيكات</h4><div class="value" id="annual-checks-received">0.00 دينار</div><div class="sub-value">من طلبات السنة</div></div><div class="summary-card"><h4>مقبوضات بنكية</h4><div class="value" id="annual-bank-received">0.00 دينار</div><div class="sub-value">من طلبات السنة</div></div><div class="summary-card"><h4>أجور النقل</h4><div class="value" id="annual-driver-wages">0.00 دينار</div><div class="sub-value">مصاريف السنة</div></div></div><h4>مبيعات الشهور خلال السنة</h4><div class="monthly-chart" id="monthly-chart"></div><div class="sales-details"><h4>تفاصيل المبيعات السنوية</h4><div id="annual-sales-details"></div></div></div>
             </div>
 
             <!-- قسم وزن المخرجات من المصنع -->
@@ -657,18 +677,29 @@
         
             <!-- قسم تسجيل شحنة (لفائف وسكراب) -->
             <div class="client-info" style="margin-bottom: 20px;">
-                <h3><i class="fas fa-truck-loading"></i> تسجيل شحنة واردة (لفائف وسكراب)</h3>
-                <p>استخدم هذا القسم لتسجيل شحنات الحديد التي تحتوي على لفائف وسكراب معاً.</p>
-                <div class="client-details" style="grid-template-columns: 1fr 1fr 1fr auto; align-items: end;">
-                    <div><strong>وزن اللفائف (كجم):</strong> <input type="number" id="shipment-coil-weight" placeholder="0.00"></div>
-                    <div><strong>وزن السكراب (كجم):</strong> <input type="number" id="shipment-scrap-weight" placeholder="0.00"></div>
+                <h3><i class="fas fa-truck-loading"></i> تسجيل شحنة واردة</h3>
+                <p>استخدم هذا القسم لتسجيل الوزن الإجمالي للشحنات الواردة من الحديد.</p>
+                <div class="client-details" style="grid-template-columns: 1fr 1fr auto; align-items: end;">
+                    <div><strong>الوزن الإجمالي للشحنة (كجم):</strong> <input type="number" id="shipment-weight" placeholder="0.00"></div>
                     <div><strong>ملاحظات الشحنة:</strong> <input type="text" id="shipment-notes" placeholder="رقم الشحنة، اسم المورد، الخ"></div>
-                    <div class="actions" style="margin: 0; justify-content: flex-start;">
-                        <button class="btn btn-success" id="save-shipment-entry"><i class="fas fa-save"></i> حفظ الشحنة</button>
-                    </div>
+                    <div class="actions" style="margin: 0; justify-content: flex-start;"><button class="btn btn-success" id="save-shipment-entry"><i class="fas fa-save"></i> حفظ الشحنة</button></div>
                 </div>
             </div>
         
+            <!-- قسم تسجيل بيع سكراب -->
+            <div class="client-info" style="margin-bottom: 20px; background-color: #fff5f5; border-color: #e53e3e;">
+                <h3><i class="fas fa-dollar-sign"></i> تسجيل بيع سكراب</h3>
+                <p>استخدم هذا القسم لتسجيل الكميات المباعة من السكراب لإنقاصها من الرصيد.</p>
+                <div class="client-details" style="grid-template-columns: 1fr 1fr 1fr auto; align-items: end;">
+                    <div><strong>وزن السكراب المباع (كجم):</strong> <input type="number" id="scrapsale-weight" placeholder="0.00"></div>
+                    <div><strong>السعر المستلم:</strong> <input type="number" id="scrapsale-price" placeholder="0.00"></div>
+                    <div><strong>ملاحظات (المشتري، الخ):</strong> <input type="text" id="scrapsale-notes" placeholder="اسم المشتري، تفاصيل"></div>
+                    <div class="actions" style="margin: 0; justify-content: flex-start;">
+                        <button class="btn btn-success" id="save-scrapsale-entry"><i class="fas fa-save"></i> حفظ البيع</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="reports-section" style="margin-top: 30px;">
                 <h4><i class="fas fa-list-alt"></i> الحركات اليدوية المسجلة هذا الأسبوع</h4>
                 <div id="weekly-manual-entries-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px;">
@@ -740,10 +771,101 @@
                     <h3><i class="fas fa-list-alt"></i> قائمة الدفعات</h3>
                     <div class="actions" style="margin-top: 0;"><button class="btn btn-info" id="print-payments-log"><i class="fas fa-print"></i> طباعة القائمة</button></div>
                 </div>
-                <div id="payments-log-container"><table id="payments-log-table"><thead><tr><th>التاريخ</th><th>العميل</th><th>المبلغ</th><th>طريقة الدفع</th><th>البيان/التفاصيل</th></tr></thead><tbody id="payments-log-body"></tbody></table></div>
+                <div id="payments-log-container" class="table-responsive">
+                    <table id="payments-log-table">
+                        <thead>
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>العميل</th>
+                                <th>المبلغ</th>
+                                <th>طريقة الدفع</th>
+                                <th>البيان/التفاصيل</th>
+                                <th>الفواتير المرتبطة</th>
+                                <th class="no-print">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payments-log-body"></tbody>
+                    </table>
+                </div>
                 <div class="total-section" style="margin-top: 20px;"><div class="grand-total">إجمالي الدفعات المعروضة: <span id="total-payments-log-amount">0.00</span> دينار</div></div>
             </div>
         </div>
+
+        <!-- تبويب أجور السائقين -->
+<div class="tab-content" id="drivers-tab">
+    <h1><i class="fas fa-shipping-fast"></i> أجور السائقين</h1>
+
+    <!-- قسم كشوف حسابات السائقين -->
+    <div class="client-history" style="margin-bottom: 30px;">
+        <h3><i class="fas fa-users"></i> كشوف حسابات السائقين</h3>
+        <p>ملخص مالي لكل سائق. من هنا يمكنك تسجيل دفعة أو عرض كشف حساب تفصيلي.</p>
+        <div id="driver-accounts-list" class="client-list">
+            <!-- Driver account summaries will be injected here -->
+        </div>
+    </div>
+    
+    <!-- نموذج إدخال نقلة جديدة -->
+    <div class="client-info">
+        <h3><i class="fas fa-plus-circle"></i> تسجيل أجرة نقل (نقلة) جديدة</h3>
+        <div class="client-details" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+            <div>
+                <strong>تاريخ النقلة:</strong>
+                <input type="date" id="driver-date" value="">
+            </div>
+            <div>
+                <strong>اسم السائق:</strong>
+                <div class="autocomplete">
+                    <input type="text" id="driver-name" placeholder="ابحث أو أدخل اسم جديد">
+                    <div id="driver-autocomplete-list" class="autocomplete-items"></div>
+                </div>
+            </div>
+            <div>
+                <strong>من:</strong>
+                <input type="text" id="driver-from" placeholder="جهة الانطلاق">
+            </div>
+            <div>
+                <strong>إلى:</strong>
+                <input type="text" id="driver-to" placeholder="جهة الوصول">
+            </div>
+            <div>
+                <strong>نوع الحمولة:</strong>
+                <select id="driver-load-type">
+                    <option value="iron">حديد</option>
+                    <option value="other">بضائع أخرى</option>
+                </select>
+            </div>
+            <div id="driver-tonnage-field">
+                <strong>الوزن (كجم):</strong>
+                <input type="number" id="driver-weight-kg" placeholder="مثال: 2500" min="0" step="1">
+            </div>
+            <div id="driver-description-field" style="display: none;">
+                <strong>وصف البضاعة:</strong>
+                <input type="text" id="driver-description" placeholder="مثال: أثاث، مواد بناء، الخ">
+            </div>
+            <div>
+                <strong>قيمة الأجرة (دينار):</strong>
+                <input type="number" id="driver-cost" placeholder="0.00" min="0" step="0.01">
+            </div>
+        </div>
+        <div class="actions" style="justify-content: flex-start;">
+            <button class="btn btn-success" id="save-driver-wage"><i class="fas fa-save"></i> حفظ الأجرة</button>
+        </div>
+    </div>
+
+    <!-- جدول النقالات المسجلة -->
+    <div class="purchase-history-section" style="margin-top: 30px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+            <h3><i class="fas fa-list-ul"></i> سجل النقالات وأجور النقل</h3>
+            <div class="actions" style="margin-top: 0;">
+                <button class="btn btn-info" id="print-driver-wages-report"><i class="fas fa-print"></i> طباعة كشف النقالات</button>
+            </div>
+        </div>
+        <div id="driver-wages-list-container"></div>
+        <div class="total-section" style="margin-top: 20px;">
+            <div class="grand-total">إجمالي أجور النقل: <span id="total-driver-wages">0.00</span> دينار</div>
+        </div>
+    </div>
+</div>
 
     </div>
 

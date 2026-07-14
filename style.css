@@ -1414,6 +1414,237 @@ input:focus, select:focus {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
 }
+@media (max-width: 768px) {
+    /* --- تحسينات عامة للجوال --- */
+    body {
+        padding: 5px;
+    }
+    .container {
+        padding: 10px;
+        border-radius: 10px;
+    }
+    .modal-content {
+        padding: 15px;
+        width: 95%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    h1 {
+        font-size: 22px;
+    }
+    .tabs {
+        padding: 5px;
+    }
+    .tab {
+        padding: 10px 15px;
+    }
+    .client-info, .reports-section, .purchase-history-section, .employee-report {
+        padding: 15px;
+    }
+    .client-details, .employee-info, .calculator-form {
+        grid-template-columns: 1fr;
+    }
+    .actions {
+        flex-direction: column;
+    }
+    .actions .btn {
+        width: 100%;
+        margin: 5px 0;
+    }
+
+    /* --- تحويل جميع الجداول إلى بطاقات --- */
+
+    /* إخفاء رؤوس الجداول */
+    table thead {
+        display: none;
+    }
+
+    /* تحويل الصفوف إلى بطاقات */
+    table tr {
+        display: block;
+        background: #ffffff;
+        border-radius: 12px;
+        margin-bottom: 15px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 1px solid #e9ecef;
+    }
+    
+    /* إخفاء الصفوف الفارغة في tbody */
+    table tr:empty {
+        display: none;
+    }
+
+    /* تحويل الخلايا إلى أسطر */
+    table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        text-align: left;
+        padding: 8px 0;
+        border-bottom: 1px dotted #eee;
+    }
+    table td:last-child {
+        border-bottom: none;
+    }
+
+    /* إضافة العناوين للخلايا */
+    table td::before {
+        content: attr(data-label); /* Fallback */
+        font-weight: bold;
+        color: #3498db;
+        text-align: right;
+        padding-left: 15px;
+        white-space: nowrap;
+    }
+
+    /* إخفاء رقم الصف التسلسلي */
+    table td:first-child {
+        display: none;
+    }
+    
+    /* تخصيص خلايا الإجراءات */
+    table td.no-print {
+        justify-content: center;
+        padding-top: 10px;
+    }
+    table td.no-print::before {
+        display: none;
+    }
+
+    /* --- تخصيص عناوين كل جدول --- */
+
+    /* جدول: سجل المبيعات في التقارير */
+    .sales-details-table td:nth-of-type(1)::before { content: 'رقم الطلب'; }
+    .sales-details-table td:nth-of-type(2)::before { content: 'التاريخ'; }
+    .sales-details-table td:nth-of-type(3)::before { content: 'العميل'; }
+    .sales-details-table td:nth-of-type(4)::before { content: 'المنتج'; }
+    .sales-details-table td:nth-of-type(5)::before { content: 'السماكة'; }
+    .sales-details-table td:nth-of-type(6)::before { content: 'الكمية'; }
+    .sales-details-table td:nth-of-type(7)::before { content: 'السعر'; }
+    .sales-details-table td:nth-of-type(8)::before { content: 'المجموع'; }
+    .sales-details-table td:nth-of-type(1) { display: flex; } /* إظهار رقم الطلب */
+
+    /* جدول: وزن المخرجات */
+    #output-weight-table td:first-child { display: flex; }
+    #output-weight-table td:nth-of-type(1)::before { content: 'اسم المنتج'; }
+    #output-weight-table td:nth-of-type(2)::before { content: 'الوزن (كجم)'; }
+
+    /* جدول: الحركات اليدوية للجرد */
+    #weekly-manual-entries-list table td:first-child { display: flex; }
+    #weekly-manual-entries-list table td:nth-of-type(1)::before { content: 'التاريخ'; }
+    #weekly-manual-entries-list table td:nth-of-type(2)::before { content: 'النوع'; }
+    #weekly-manual-entries-list table td:nth-of-type(3)::before { content: 'المادة'; }
+    #weekly-manual-entries-list table td:nth-of-type(4)::before { content: 'الكمية'; }
+    #weekly-manual-entries-list table td:nth-of-type(5)::before { content: 'الوحدة'; }
+    #weekly-manual-entries-list table td:nth-of-type(6)::before { content: 'ملاحظات'; }
+
+    /* جدول: تقرير الجرد الأسبوعي */
+    #weekly-inventory-report-table td:first-child { display: flex; }
+    #weekly-inventory-report-table td:nth-of-type(1)::before { content: 'المادة'; }
+    #weekly-inventory-report-table td:nth-of-type(2)::before { content: 'الوحدة'; }
+    #weekly-inventory-report-table td:nth-of-type(3)::before { content: 'أول المدة'; }
+    #weekly-inventory-report-table td:nth-of-type(4)::before { content: 'الوارد'; }
+    #weekly-inventory-report-table td:nth-of-type(5)::before { content: 'الصادر'; }
+    #weekly-inventory-report-table td:nth-of-type(6)::before { content: 'السكراب'; }
+    #weekly-inventory-report-table td:nth-of-type(7)::before { content: 'الرصيد النهائي'; }
+
+    /* جدول: الجرد النهائي للمصنع */
+    #factory-inventory-report-table td:first-child { display: flex; }
+    #factory-inventory-report-table td:nth-of-type(1)::before { content: 'المادة'; }
+    #factory-inventory-report-table td:nth-of-type(2)::before { content: 'الوحدة'; }
+    #factory-inventory-report-table td:nth-of-type(3)::before { content: 'إجمالي الافتتاحي'; }
+    #factory-inventory-report-table td:nth-of-type(4)::before { content: 'إجمالي الوارد'; }
+    #factory-inventory-report-table td:nth-of-type(5)::before { content: 'إجمالي الصادر'; }
+    #factory-inventory-report-table td:nth-of-type(6)::before { content: 'إجمالي السكراب'; }
+    #factory-inventory-report-table td:nth-of-type(7)::before { content: 'الرصيد النهائي'; }
+
+    /* جدول: سجل الدفعات العام */
+    #payments-log-table td:first-child { display: flex; }
+    #payments-log-table td:nth-of-type(1)::before { content: 'التاريخ'; }
+    #payments-log-table td:nth-of-type(2)::before { content: 'العميل'; }
+    #payments-log-table td:nth-of-type(3)::before { content: 'المبلغ'; }
+    #payments-log-table td:nth-of-type(4)::before { content: 'الطريقة'; }
+    #payments-log-table td:nth-of-type(5)::before { content: 'البيان'; }
+    #payments-log-table td:nth-of-type(6)::before { content: 'فواتير مرتبطة'; }
+
+    /* جدول: أجور السائقين */
+    #driver-wages-list-container table td:first-child { display: flex; }
+    #driver-wages-list-container table td:nth-of-type(1)::before { content: 'رقم النقلة'; }
+    #driver-wages-list-container table td:nth-of-type(2)::before { content: 'التاريخ'; }
+    #driver-wages-list-container table td:nth-of-type(3)::before { content: 'السائق'; }
+    #driver-wages-list-container table td:nth-of-type(4)::before { content: 'من'; }
+    #driver-wages-list-container table td:nth-of-type(5)::before { content: 'إلى'; }
+    #driver-wages-list-container table td:nth-of-type(6)::before { content: 'الحمولة'; }
+    #driver-wages-list-container table td:nth-of-type(7)::before { content: 'التفاصيل'; }
+    #driver-wages-list-container table td:nth-of-type(8)::before { content: 'الأجرة'; }
+
+    /* جدول: السجل المالي (Ledger) */
+    .ledger-table td:first-child { display: flex; }
+    .ledger-table td:nth-of-type(1)::before { content: 'التاريخ'; }
+    .ledger-table td:nth-of-type(2)::before { content: 'البيان'; }
+    .ledger-table td:nth-of-type(3)::before { content: 'مدين'; }
+    .ledger-table td:nth-of-type(4)::before { content: 'دائن'; }
+    .ledger-table td:nth-of-type(5)::before { content: 'الرصيد'; }
+
+    /* جدول: قائمة المنتجات في المودال */
+    .modal-product-table td:first-child { display: flex; }
+    .modal-product-table td:nth-of-type(1)::before { content: 'اسم المنتج'; }
+    .modal-product-table td:nth-of-type(2)::before { content: 'العرض'; }
+    .modal-product-table td:nth-of-type(3)::before { content: 'الطول'; }
+    .modal-product-table td:nth-of-type(4)::before { content: 'الوزن (كجم/مم)'; }
+    .modal-product-table td:nth-of-type(5)::before { content: 'النوع'; }
+
+    /* جدول: ملخصات المبيعات */
+    #steel-thickness-purchases table td:first-child,
+    #product-sales-totals table td:first-child { display: flex; }
+    #steel-thickness-purchases table td:nth-of-type(1)::before { content: 'السماكة'; }
+    #steel-thickness-purchases table td:nth-of-type(2)::before { content: 'الكمية الإجمالية'; }
+    #steel-thickness-purchases table td:nth-of-type(3)::before { content: 'القيمة الإجمالية'; }
+    #product-sales-totals table td:nth-of-type(1)::before { content: 'المنتج'; }
+    #product-sales-totals table td:nth-of-type(2)::before { content: 'الكمية المباعة'; }
+    #product-sales-totals table td:nth-of-type(3)::before { content: 'إجمالي المبيعات'; }
+
+    /* --- تعديل الجداول التي تحتوي على حقول إدخال --- */
+    #inventory-entries-table tr,
+    #external-quote-products-table tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    #inventory-entries-table td,
+    #external-quote-products-table td {
+        display: block;
+        border: none;
+        padding: 0;
+    }
+    #inventory-entries-table td::before,
+    #external-quote-products-table td::before {
+        display: block;
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 2px;
+        text-align: right;
+    }
+    
+    /* جدول: مدخلات الجرد */
+    #inventory-entries-table td:nth-of-type(2) { grid-column: 1 / -1; } /* Product Name */
+    #inventory-entries-table td:nth-of-type(3)::before { content: 'السماكة (مم)'; }
+    #inventory-entries-table td:nth-of-type(4)::before { content: 'الكمية (قطعة)'; }
+    #inventory-entries-table td:nth-of-type(5) { grid-column: 1 / -1; text-align: center; background: #f0f7ff; padding: 8px; border-radius: 6px; }
+    #inventory-entries-table td:nth-of-type(5)::before { content: 'الوزن المحسوب (كجم)'; }
+    #inventory-entries-table td:nth-of-type(6) { grid-column: 1 / -1; } /* Actions */
+
+    /* جدول: عرض سعر خارجي */
+    #external-quote-products-table td:nth-of-type(2) { grid-column: 1 / -1; } /* Description */
+    #external-quote-products-table td:nth-of-type(3)::before { content: 'الكمية (كجم)'; }
+    #external-quote-products-table td:nth-of-type(4)::before { content: 'العرض'; }
+    #external-quote-products-table td:nth-of-type(5)::before { content: 'سعر الطن'; }
+    #external-quote-products-table td:nth-of-type(6) { grid-column: 1 / -1; text-align: center; background: #f0f7ff; padding: 8px; border-radius: 6px; }
+    #external-quote-products-table td:nth-of-type(6)::before { content: 'المجموع'; }
+    #external-quote-products-table td:nth-of-type(7) { grid-column: 1 / -1; } /* Actions */
+}
+
 
 /* =========================================
    أنماط السجل المالي التفصيلي
@@ -1522,4 +1753,54 @@ input:focus, select:focus {
 
 #external-quote-products-table input[type="text"] {
     text-align: right;
+}
+
+/* =========================================
+   سجل الدفعات المحسن
+   ========================================= */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#payments-log-table {
+    font-size: 14px;
+}
+
+#payments-log-table th, #payments-log-table td {
+    padding: 12px 10px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.payment-method-badge {
+    padding: 4px 10px;
+    border-radius: 15px;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.method-cash { background-color: #2ecc71; }
+.method-check { background-color: #f39c12; }
+.method-bank { background-color: #3498db; }
+.method-manual { background-color: #95a5a6; }
+.method-receivable { background-color: #e74c3c; }
+.method-exchange { background-color: #9b59b6; }
+
+.amount-cell {
+    font-weight: bold;
+    color: #2c3e50;
+    font-size: 1.1em;
+}
+
+.payment-log-actions {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+}
+
+.payment-log-actions .btn-sm {
+    padding: 5px 10px;
+    font-size: 12px;
 }
