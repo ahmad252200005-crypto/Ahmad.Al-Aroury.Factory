@@ -1153,9 +1153,8 @@ async function saveInvoice() {
     try {
         let paymentData = {};
         const grandTotal = parseFloat(document.getElementById('grand-total').textContent) || 0;
-        const previousBalance = parseFloat(document.getElementById('previous-balance').textContent) || 0;
-        const totalDue = grandTotal + previousBalance;
-
+        
+        // إصلاح 1: تم فصل الرصيد السابق عن المبلغ المتبقي للفاتورة لكي لا يتضاعف الرصيد
         if (document.getElementById('enable-multiple-payments').checked) {
             const payments = [];
             let totalPaid = 0;
@@ -1172,7 +1171,7 @@ async function saveInvoice() {
                     totalPaid += amount;
                 }
             });
-            paymentData = { type: 'multiple', payments, paidAmount: totalPaid, remainingBalance: totalDue - totalPaid };
+            paymentData = { type: 'multiple', payments, paidAmount: totalPaid, remainingBalance: grandTotal - totalPaid };
         } else {
             const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
             const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
@@ -1181,7 +1180,7 @@ async function saveInvoice() {
                 checkDate: document.getElementById('check-date-single').value || '',
                 checkImage: document.getElementById('check-preview-single').src || ''
             } : null;
-            paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: totalDue - paidAmount, checkDetails };
+            paymentData = { type: 'single', method: paymentMethod, paidAmount, remainingBalance: grandTotal - paidAmount, checkDetails };
         }
 
         const selectedDate = document.getElementById('invoice-date-input').value;
@@ -1214,27 +1213,23 @@ async function saveInvoice() {
                 payments: [],
                 adjustments: []
             };
+            clients.push(client);
         } else {
             client.address = clientAddress;
             client.phone = clientPhone;
         }
 
+        // مسح الفاتورة القديمة من الذاكرة المحلية لتجنب التكرار
         if (editingInvoiceId && editingInvoiceSnapshot) {
             const oldClient = clients.find(c => c.name === editingInvoiceSnapshot.client.name);
-
-            if (oldClient) {
-                oldClient.balance -= (editingInvoiceSnapshot.payment.remainingBalance || 0);
-                if (oldClient.payments) {
-                    oldClient.payments = oldClient.payments.filter(p => !p.invoiceIds || !p.invoiceIds.includes(editingInvoiceId));
-                }
+            if (oldClient && oldClient.payments) {
+                oldClient.payments = oldClient.payments.filter(p => !p.invoiceIds || !p.invoiceIds.includes(editingInvoiceId));
             }
-
-            client.balance = (client.balance || 0) + invoice.payment.remainingBalance;
             invoices = invoices.filter(inv => inv.id !== editingInvoiceId);
             deletePurchaseHistoryByInvoiceId(editingInvoiceId);
-        } else {
-            client.balance = (client.balance || 0) + invoice.payment.remainingBalance;
         }
+
+        invoices.push(invoice);
 
         if (invoice.payment.paidAmount > 0) {
             if (!client.payments) client.payments = [];
@@ -1257,24 +1252,36 @@ async function saveInvoice() {
             }
         }
 
-        if (isNewClient) clients.push(client);
+        // إصلاح 2: إعادة احتساب رصيد العميل بشكل آمن ودقيق بدلاً من الزيادة والنقصان العشوائي
+        const recalculateBalanceFor = (targetClient) => {
+            let totalRemaining = 0;
+            invoices.filter(inv => inv.client.name === targetClient.name).forEach(inv => {
+                totalRemaining += (inv.payment.remainingBalance || 0);
+            });
+            const totalAdjustments = (targetClient.adjustments || []).reduce((sum, adj) => sum + adj.amount, 0);
+            targetClient.balance = totalRemaining + totalAdjustments;
+        };
+
+        recalculateBalanceFor(client);
+        if (editingInvoiceId && editingInvoiceSnapshot && editingInvoiceSnapshot.client.name !== clientName) {
+            const oldClient = clients.find(c => c.name === editingInvoiceSnapshot.client.name);
+            if (oldClient) recalculateBalanceFor(oldClient);
+        }
 
         localStorage.setItem('clients', JSON.stringify(clients));
+        localStorage.setItem('invoices', JSON.stringify(invoices));
 
         productsData.forEach(product => {
             addToPurchaseHistory(product.productName, product.thickness, product.quantity, product.price, product.total, clientName, invoice.id);
         });
-
-        invoices.push(invoice);
-        localStorage.setItem('invoices', JSON.stringify(invoices));
         localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
 
         try {
             await sendToCloud({ action: 'saveClient', client: client });
             await sendToCloud({ action: 'saveInvoice', invoice: invoice });
-            if (editingInvoiceId) {
-                await sendToCloud({ action: 'deleteInvoice', invoiceId: editingInvoiceId });
-            }
+            
+            // إصلاح 3: تم حذف دالة الحذف السحابي لأن الحفظ بالـ ID الثابت يقوم بعمل Update وتحديث تلقائي دون إخفاء الفاتورة
+            
             await fetchCloudData();
             showNotification(editingInvoiceId ? 'تم تعديل طلب البيع بنجاح' : 'تم حفظ طلب البيع بنجاح');
         } catch (err) {
@@ -1293,7 +1300,6 @@ async function saveInvoice() {
         saveButton.innerHTML = '<i class="fas fa-save"></i> حفظ الطلب';
     }
 }
-
 function editInvoice(invoiceId) {
     const invoiceIndex = invoices.findIndex(inv => inv.id === invoiceId);
     if (invoiceIndex === -1) {
