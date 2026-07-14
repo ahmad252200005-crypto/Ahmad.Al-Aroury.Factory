@@ -761,25 +761,35 @@ function populateProductEditorList(filter = '') {
 }
 
 async function saveProductFromModal() {
-    const name = document.getElementById('modal-product-name').value.trim();
-    const width = parseFloat(document.getElementById('modal-product-width').value) || null;
-    const isSteel = document.getElementById('modal-product-is-steel').checked;
-    const length = parseFloat(document.getElementById('modal-product-length').value) || null;
-    if (!name) {
-        showNotification('اسم المنتج لا يمكن أن يكون فارغاً', 'error');
-        return;
+    const saveBtn = document.getElementById('save-product-modal');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
+    try {
+        const name = document.getElementById('modal-product-name').value.trim();
+        const width = parseFloat(document.getElementById('modal-product-width').value) || null;
+        const isSteel = document.getElementById('modal-product-is-steel').checked;
+        const length = parseFloat(document.getElementById('modal-product-length').value) || null;
+        if (!name) {
+            showNotification('اسم المنتج لا يمكن أن يكون فارغاً', 'error');
+            return;
+        }
+        const existingProductIndex = products.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
+        if (existingProductIndex > -1) {
+            Object.assign(products[existingProductIndex], { width, length, isSteel });
+        } else {
+            products.push({ name, width, length, isSteel });
+        }
+        await saveProducts();
+        showNotification('تم حفظ المنتج بنجاح', 'success');
+        clearProductModalForm();
+        populateProductEditorList(document.getElementById('modal-product-search').value);
+        refreshAllProductDropdowns();
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
     }
-    const existingProductIndex = products.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
-    if (existingProductIndex > -1) {
-        Object.assign(products[existingProductIndex], { width, length, isSteel });
-    } else {
-        products.push({ name, width, length, isSteel });
-    }
-    await saveProducts();
-    showNotification('تم حفظ المنتج بنجاح', 'success');
-    clearProductModalForm();
-    populateProductEditorList(document.getElementById('modal-product-search').value);
-    refreshAllProductDropdowns();
 }
 
 function refreshAllProductDropdowns() {
@@ -947,120 +957,130 @@ function updateMultiplePaymentsTotal() {
 // ============================================================
 
 async function addPayment() {
-    const amount = parseFloat(document.getElementById('client-payment-amount-input').value) || 0;
-    const method = document.getElementById('payment-method-select').value;
-
-    if (amount <= 0) {
-        showNotification('يرجى إدخال مبلغ صحيح', 'error');
-        return;
-    }
-    if (!currentViewingClient) {
-        showNotification('لم يتم تحديد عميل', 'error');
-        return;
-    }
-
-    const clientIndex = clients.findIndex(c => c.name === currentViewingClient);
-    if (clientIndex === -1) {
-        showNotification('لم يتم العثور على العميل', 'error');
-        return;
-    }
-
-    const client = clients[clientIndex];
-    let checkDetails = null;
-    if (method === 'check') {
-        const checkNumber = document.getElementById('client-check-number').value;
-        const checkDate = document.getElementById('client-check-date').value;
-        const checkImagePreview = document.getElementById('client-check-preview');
-        const checkImage = checkImagePreview.style.display !== 'none' ? checkImagePreview.src : '';
-        checkDetails = { checkNumber, checkDate, checkImage };
-    }
-
-    const payment = {
-        id: `pay_${Date.now()}`,
-        date: new Date().toISOString(),
-        amount: amount,
-        method: method,
-        checkDetails: checkDetails,
-        invoiceIds: [] 
-    };
-
-    const clientInvoices = invoices
-        .filter(inv => inv.client.name === currentViewingClient && inv.payment.remainingBalance > 0)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    let remainingAmount = amount;
-    const appliedInvoiceIds = [];
-
-    for (let inv of clientInvoices) {
-        if (remainingAmount <= 0) break;
-
-        const oldRemaining = inv.payment.remainingBalance;
-        const paidThisInvoice = Math.min(remainingAmount, oldRemaining);
-
-        inv.payment.remainingBalance = oldRemaining - paidThisInvoice;
-        inv.payment.paidAmount = (inv.payment.paidAmount || 0) + paidThisInvoice;
-        inv.status = inv.payment.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة';
-
-        appliedInvoiceIds.push(inv.id);
-        remainingAmount -= paidThisInvoice;
-    }
-
-    payment.invoiceIds = appliedInvoiceIds;
-
-    const appliedAmount = amount - remainingAmount;
-    client.balance = (client.balance || 0) - appliedAmount;
-
-    if (remainingAmount > 0) {
-        if (!client.adjustments) client.adjustments = [];
-        client.adjustments.push({
-            id: `adj_${Date.now()}`,
-            date: new Date().toISOString(),
-            amount: -remainingAmount, 
-            reason: 'دفعة زائدة عن إجمالي الفواتير'
-        });
-        client.balance = (client.balance || 0) - remainingAmount;
-    }
-
-    if (!client.payments) client.payments = [];
-    client.payments.push(payment);
-
-    localStorage.setItem('invoices', JSON.stringify(invoices));
-    localStorage.setItem('clients', JSON.stringify(clients));
+    const saveBtn = document.getElementById('add-payment');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
     try {
-        for (let inv of clientInvoices) {
-            if (appliedInvoiceIds.includes(inv.id)) {
-                await sendToCloud({ action: 'saveInvoice', invoice: inv });
-            }
+        const amount = parseFloat(document.getElementById('client-payment-amount-input').value) || 0;
+        const method = document.getElementById('payment-method-select').value;
+
+        if (amount <= 0) {
+            showNotification('يرجى إدخال مبلغ صحيح', 'error');
+            return;
         }
-        await sendToCloud({ action: 'saveClient', client: client });
-        showNotification('تم إضافة الدفعة ومزامنتها بنجاح');
+        if (!currentViewingClient) {
+            showNotification('لم يتم تحديد عميل', 'error');
+            return;
+        }
 
-        lastAddedPaymentInfo = {
-            clientName: currentViewingClient,
-            payment: payment,
-            appliedAmount: appliedAmount,
-            remainingAmount: remainingAmount
+        const clientIndex = clients.findIndex(c => c.name === currentViewingClient);
+        if (clientIndex === -1) {
+            showNotification('لم يتم العثور على العميل', 'error');
+            return;
+        }
+
+        const client = clients[clientIndex];
+        let checkDetails = null;
+        if (method === 'check') {
+            const checkNumber = document.getElementById('client-check-number').value;
+            const checkDate = document.getElementById('client-check-date').value;
+            const checkImagePreview = document.getElementById('client-check-preview');
+            const checkImage = checkImagePreview.style.display !== 'none' ? checkImagePreview.src : '';
+            checkDetails = { checkNumber, checkDate, checkImage };
+        }
+
+        const payment = {
+            id: `pay_${Date.now()}`,
+            date: new Date().toISOString(),
+            amount: amount,
+            method: method,
+            checkDetails: checkDetails,
+            invoiceIds: []
         };
-        document.getElementById('receiptOptionsModal').style.display = 'flex';
-    } catch (err) {
-        console.error('فشل مزامنة الدفعة:', err);
-        showNotification('تم حفظ الدفعة محلياً، لكن فشلت المزامنة السحابية', 'error');
-    }
 
-    document.getElementById('paymentModal').style.display = 'none';
-    loadClientsList();
-    if (document.getElementById('client-invoices-section').style.display === 'block' &&
-        document.getElementById('current-client-name').textContent === currentViewingClient) {
-        viewClientInvoices(currentViewingClient);
-    }
+        const clientInvoices = invoices
+            .filter(inv => inv.client.name === currentViewingClient && inv.payment.remainingBalance > 0)
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    document.getElementById('client-payment-amount-input').value = '0.00';
-    document.getElementById('client-payment-check-fields').style.display = 'none';
-    document.getElementById('client-check-number').value = '';
-    document.getElementById('client-check-date').value = '';
-    document.getElementById('client-check-image').value = '';
-    document.getElementById('client-check-preview').style.display = 'none';
+        let remainingAmount = amount;
+        const appliedInvoiceIds = [];
+
+        for (let inv of clientInvoices) {
+            if (remainingAmount <= 0) break;
+
+            const oldRemaining = inv.payment.remainingBalance;
+            const paidThisInvoice = Math.min(remainingAmount, oldRemaining);
+
+            inv.payment.remainingBalance = oldRemaining - paidThisInvoice;
+            inv.payment.paidAmount = (inv.payment.paidAmount || 0) + paidThisInvoice;
+            inv.status = inv.payment.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة';
+
+            appliedInvoiceIds.push(inv.id);
+            remainingAmount -= paidThisInvoice;
+        }
+
+        payment.invoiceIds = appliedInvoiceIds;
+
+        const appliedAmount = amount - remainingAmount;
+        client.balance = (client.balance || 0) - appliedAmount;
+
+        if (remainingAmount > 0) {
+            if (!client.adjustments) client.adjustments = [];
+            client.adjustments.push({
+                id: `adj_${Date.now()}`,
+                date: new Date().toISOString(),
+                amount: -remainingAmount,
+                reason: 'دفعة زائدة عن إجمالي الفواتير'
+            });
+            client.balance = (client.balance || 0) - remainingAmount;
+        }
+
+        if (!client.payments) client.payments = [];
+        client.payments.push(payment);
+
+        localStorage.setItem('invoices', JSON.stringify(invoices));
+        localStorage.setItem('clients', JSON.stringify(clients));
+
+        try {
+            for (let inv of clientInvoices) {
+                if (appliedInvoiceIds.includes(inv.id)) {
+                    await sendToCloud({ action: 'saveInvoice', invoice: inv });
+                }
+            }
+            await sendToCloud({ action: 'saveClient', client: client });
+            showNotification('تم إضافة الدفعة ومزامنتها بنجاح');
+
+            lastAddedPaymentInfo = {
+                clientName: currentViewingClient,
+                payment: payment,
+                appliedAmount: appliedAmount,
+                remainingAmount: remainingAmount
+            };
+            document.getElementById('receiptOptionsModal').style.display = 'flex';
+        } catch (err) {
+            console.error('فشل مزامنة الدفعة:', err);
+            showNotification('تم حفظ الدفعة محلياً، لكن فشلت المزامنة السحابية', 'error');
+        }
+
+        document.getElementById('paymentModal').style.display = 'none';
+        loadClientsList();
+        if (document.getElementById('client-invoices-section').style.display === 'block' &&
+            document.getElementById('current-client-name').textContent === currentViewingClient) {
+            viewClientInvoices(currentViewingClient);
+        }
+
+        document.getElementById('client-payment-amount-input').value = '0.00';
+        document.getElementById('client-payment-check-fields').style.display = 'none';
+        document.getElementById('client-check-number').value = '';
+        document.getElementById('client-check-date').value = '';
+        document.getElementById('client-check-image').value = '';
+        document.getElementById('client-check-preview').style.display = 'none';
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
+    }
 }
 
 // ============================================================
@@ -1539,69 +1559,79 @@ function searchClient() {
 }
 
 async function saveClient() {
-    const name = document.getElementById('new-client-name').value.trim();
-    const address = document.getElementById('new-client-address').value.trim();
-    const phone = document.getElementById('new-client-phone').value.trim();
-    if (!name) {
-        showNotification('يرجى إدخال اسم العميل', 'error');
-        return;
-    }
-    const existingClient = clients.find(client => client.name === name);
-    if (existingClient && existingClient.name !== editingClientName) {
-        showNotification('هناك عميل مسجل بنفس الاسم', 'error');
-        return;
-    }
-    if (editingClientName) {
-        const clientToEdit = clients.find(client => client.name === editingClientName);
-        if (!clientToEdit) {
-            showNotification('لم يتم العثور على العميل المطلوب', 'error');
+    const saveBtn = document.getElementById('save-client');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
+    try {
+        const name = document.getElementById('new-client-name').value.trim();
+        const address = document.getElementById('new-client-address').value.trim();
+        const phone = document.getElementById('new-client-phone').value.trim();
+        if (!name) {
+            showNotification('يرجى إدخال اسم العميل', 'error');
             return;
         }
-        clientToEdit.name = name;
-        clientToEdit.address = address;
-        clientToEdit.phone = phone;
-        invoices.forEach(invoice => {
-            if (invoice.client && invoice.client.name === editingClientName) {
-                invoice.client.name = name;
-                invoice.client.address = address;
-                invoice.client.phone = phone;
+        const existingClient = clients.find(client => client.name === name);
+        if (existingClient && existingClient.name !== editingClientName) {
+            showNotification('هناك عميل مسجل بنفس الاسم', 'error');
+            return;
+        }
+        if (editingClientName) {
+            const clientToEdit = clients.find(client => client.name === editingClientName);
+            if (!clientToEdit) {
+                showNotification('لم يتم العثور على العميل المطلوب', 'error');
+                return;
             }
-        });
-        purchaseHistory.forEach(purchase => {
-            if (purchase.clientName === editingClientName) purchase.clientName = name;
-        });
-        localStorage.setItem('invoices', JSON.stringify(invoices));
-        localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
-        localStorage.setItem('clients', JSON.stringify(clients));
-        try {
-            await sendToCloud({ action: 'saveClient', client: clientToEdit });
-            await fetchCloudData();
-            showNotification('تم تعديل العميل بنجاح');
-        } catch (err) {
-            console.error('فشل تعديل العميل بالسحابة:', err);
-            showNotification('تم تعديل العميل محليًا لكن لم يتم الإرسال للسحابة', 'error');
+            clientToEdit.name = name;
+            clientToEdit.address = address;
+            clientToEdit.phone = phone;
+            invoices.forEach(invoice => {
+                if (invoice.client && invoice.client.name === editingClientName) {
+                    invoice.client.name = name;
+                    invoice.client.address = address;
+                    invoice.client.phone = phone;
+                }
+            });
+            purchaseHistory.forEach(purchase => {
+                if (purchase.clientName === editingClientName) purchase.clientName = name;
+            });
+            localStorage.setItem('invoices', JSON.stringify(invoices));
+            localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
+            localStorage.setItem('clients', JSON.stringify(clients));
+            try {
+                await sendToCloud({ action: 'saveClient', client: clientToEdit });
+                await fetchCloudData();
+                showNotification('تم تعديل العميل بنجاح');
+            } catch (err) {
+                console.error('فشل تعديل العميل بالسحابة:', err);
+                showNotification('تم تعديل العميل محليًا لكن لم يتم الإرسال للسحابة', 'error');
+            }
+        } else {
+            const client = { id: Date.now().toString(), name, address, phone, balance: 0, createdAt: new Date().toISOString(), payments: [], adjustments: [] };
+            clients.push(client);
+            localStorage.setItem('clients', JSON.stringify(clients));
+            try {
+                const cloudResult = await sendToCloud({ action: 'saveClient', client: client });
+                if (cloudResult) await fetchCloudData();
+                showNotification('تم حفظ العميل بنجاح');
+            } catch (err) {
+                console.error('فشل إرسال العميل للسحابة:', err);
+                showNotification('تم حفظ العميل محليًا لكن لم يتم الإرسال للسحابة', 'error');
+            }
         }
-    } else {
-        const client = { id: Date.now().toString(), name, address, phone, balance: 0, createdAt: new Date().toISOString(), payments: [], adjustments: [] };
-        clients.push(client);
-        localStorage.setItem('clients', JSON.stringify(clients));
-        try {
-            const cloudResult = await sendToCloud({ action: 'saveClient', client: client });
-            if (cloudResult) await fetchCloudData();
-            showNotification('تم حفظ العميل بنجاح');
-        } catch (err) {
-            console.error('فشل إرسال العميل للسحابة:', err);
-            showNotification('تم حفظ العميل محليًا لكن لم يتم الإرسال للسحابة', 'error');
-        }
+        editingClientName = null;
+        document.getElementById('new-client-name').value = '';
+        document.getElementById('new-client-address').value = '';
+        document.getElementById('new-client-phone').value = '';
+        loadClientsList();
+        loadInvoicesHistory();
+        loadPurchaseHistory();
+        updateDashboard();
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
     }
-    editingClientName = null;
-    document.getElementById('new-client-name').value = '';
-    document.getElementById('new-client-address').value = '';
-    document.getElementById('new-client-phone').value = '';
-    loadClientsList();
-    loadInvoicesHistory();
-    loadPurchaseHistory();
-    updateDashboard();
 }
 
 function loadClientsList() {
@@ -2800,45 +2830,55 @@ function printSalary() {
 }
 
 async function saveSalary() {
-    const employeeName = document.getElementById('employee-name').value.trim();
-    const employeeId = document.getElementById('employee-id').value.trim();
-    const employeePosition = document.getElementById('employee-position').value.trim();
-    const month = document.getElementById('employee-month').value;
-    const year = document.getElementById('employee-year').value;
-    const basicSalary = parseFloat(document.getElementById('employee-salary').value) || 0;
-    const overtime = parseFloat(document.getElementById('employee-overtime').value) || 0;
-    const deductions = parseFloat(document.getElementById('employee-deductions').value) || 0;
-    const netSalary = basicSalary + overtime - deductions;
-    if (!employeeName) {
-        showNotification('يرجى إدخال اسم الموظف', 'error');
-        return;
-    }
-    const salaryRecord = { id: editingSalaryId || Date.now().toString(), employeeName, employeeId, employeePosition, month, year, basicSalary, overtime, deductions, netSalary, date: new Date().toISOString() };
-    if (editingSalaryId) {
-        const index = employeeSalaries.findIndex(s => s.id === editingSalaryId);
-        if (index !== -1) employeeSalaries[index] = salaryRecord;
-    } else {
-        employeeSalaries.push(salaryRecord);
-    }
-    localStorage.setItem('employeeSalaries', JSON.stringify(employeeSalaries));
+    const saveBtn = document.getElementById('save-salary');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
     try {
-        await sendToCloud({ action: 'saveSalary', salary: salaryRecord });
-        showNotification(editingSalaryId ? 'تم تعديل كشف الراتب بنجاح' : 'تم حفظ كشف الراتب بنجاح');
-    } catch (err) {
-        console.error('فشل إرسال كشف الراتب للسحابة:', err);
-        showNotification('تم حفظ كشف الراتب محليًا لكن لم يتم الإرسال للسحابة', 'error');
+        const employeeName = document.getElementById('employee-name').value.trim();
+        const employeeId = document.getElementById('employee-id').value.trim();
+        const employeePosition = document.getElementById('employee-position').value.trim();
+        const month = document.getElementById('employee-month').value;
+        const year = document.getElementById('employee-year').value;
+        const basicSalary = parseFloat(document.getElementById('employee-salary').value) || 0;
+        const overtime = parseFloat(document.getElementById('employee-overtime').value) || 0;
+        const deductions = parseFloat(document.getElementById('employee-deductions').value) || 0;
+        const netSalary = basicSalary + overtime - deductions;
+        if (!employeeName) {
+            showNotification('يرجى إدخال اسم الموظف', 'error');
+            return;
+        }
+        const salaryRecord = { id: editingSalaryId || Date.now().toString(), employeeName, employeeId, employeePosition, month, year, basicSalary, overtime, deductions, netSalary, date: new Date().toISOString() };
+        if (editingSalaryId) {
+            const index = employeeSalaries.findIndex(s => s.id === editingSalaryId);
+            if (index !== -1) employeeSalaries[index] = salaryRecord;
+        } else {
+            employeeSalaries.push(salaryRecord);
+        }
+        localStorage.setItem('employeeSalaries', JSON.stringify(employeeSalaries));
+        try {
+            await sendToCloud({ action: 'saveSalary', salary: salaryRecord });
+            showNotification(editingSalaryId ? 'تم تعديل كشف الراتب بنجاح' : 'تم حفظ كشف الراتب بنجاح');
+        } catch (err) {
+            console.error('فشل إرسال كشف الراتب للسحابة:', err);
+            showNotification('تم حفظ كشف الراتب محليًا لكن لم يتم الإرسال للسحابة', 'error');
+        }
+        editingSalaryId = null;
+        document.getElementById('employee-name').value = '';
+        document.getElementById('employee-id').value = '';
+        document.getElementById('employee-position').value = '';
+        document.getElementById('employee-salary').value = '0.00';
+        document.getElementById('employee-overtime').value = '0.00';
+        document.getElementById('employee-deductions').value = '0.00';
+        document.getElementById('employee-month').value = '1';
+        document.getElementById('employee-year').value = new Date().getFullYear();
+        document.getElementById('salary-result').style.display = 'none';
+        loadEmployeeSalaries();
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
     }
-    editingSalaryId = null;
-    document.getElementById('employee-name').value = '';
-    document.getElementById('employee-id').value = '';
-    document.getElementById('employee-position').value = '';
-    document.getElementById('employee-salary').value = '0.00';
-    document.getElementById('employee-overtime').value = '0.00';
-    document.getElementById('employee-deductions').value = '0.00';
-    document.getElementById('employee-month').value = '1';
-    document.getElementById('employee-year').value = new Date().getFullYear();
-    document.getElementById('salary-result').style.display = 'none';
-    loadEmployeeSalaries();
 }
 
 function editSalary(salaryId) {
@@ -3437,52 +3477,62 @@ function loadLedger() {
 }
 
 async function addLedgerEntry() {
-    const clientName = document.getElementById('ledger-client-search').value.trim();
-    const amount = parseFloat(document.getElementById('ledger-amount').value);
-    const reason = document.getElementById('ledger-reason').value.trim();
-    if (!clientName) {
-        showNotification('يجب اختيار عميل', 'error');
-        return;
-    }
-    if (isNaN(amount) || amount === 0) {
-        showNotification('يجب إدخال مبلغ صحيح (غير صفري)', 'error');
-        return;
-    }
-    if (!reason) {
-        showNotification('يجب إدخال السبب أو البيان', 'error');
-        return;
-    }
-    const client = clients.find(c => c.name === clientName);
-    if (!client) {
-        showNotification('العميل غير موجود في السجلات', 'error');
-        return;
-    }
-    if (!Array.isArray(client.adjustments)) client.adjustments = [];
-    client.adjustments.push({ id: `adj-${Date.now()}`, date: new Date().toISOString(), amount: amount, reason: reason });
-    client.balance = (client.balance || 0) + amount;
-    localStorage.setItem('clients', JSON.stringify(clients));
+    const saveBtn = document.getElementById('add-ledger-entry');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
     try {
-        await sendToCloud({ action: 'saveClient', client: client });
-        showNotification('تم حفظ الإدخال ومزامنة البيانات بنجاح');
-        if (amount < 0) {
-            const paymentForReceipt = {
-                date: new Date().toISOString(),
-                amount: -amount,
-                method: 'manual',
-            };
-            lastAddedPaymentInfo = { clientName: client.name, payment: paymentForReceipt };
-            document.getElementById('receiptOptionsModal').style.display = 'flex';
+        const clientName = document.getElementById('ledger-client-search').value.trim();
+        const amount = parseFloat(document.getElementById('ledger-amount').value);
+        const reason = document.getElementById('ledger-reason').value.trim();
+        if (!clientName) {
+            showNotification('يجب اختيار عميل', 'error');
+            return;
         }
-    } catch (err) {
-        console.error('فشل مزامنة إدخال الذمة:', err);
-        showNotification('تم الحفظ محلياً، ولكن فشلت المزامنة السحابية', 'error');
+        if (isNaN(amount) || amount === 0) {
+            showNotification('يجب إدخال مبلغ صحيح (غير صفري)', 'error');
+            return;
+        }
+        if (!reason) {
+            showNotification('يجب إدخال السبب أو البيان', 'error');
+            return;
+        }
+        const client = clients.find(c => c.name === clientName);
+        if (!client) {
+            showNotification('العميل غير موجود في السجلات', 'error');
+            return;
+        }
+        if (!Array.isArray(client.adjustments)) client.adjustments = [];
+        client.adjustments.push({ id: `adj-${Date.now()}`, date: new Date().toISOString(), amount: amount, reason: reason });
+        client.balance = (client.balance || 0) + amount;
+        localStorage.setItem('clients', JSON.stringify(clients));
+        try {
+            await sendToCloud({ action: 'saveClient', client: client });
+            showNotification('تم حفظ الإدخال ومزامنة البيانات بنجاح');
+            if (amount < 0) {
+                const paymentForReceipt = {
+                    date: new Date().toISOString(),
+                    amount: -amount,
+                    method: 'manual',
+                };
+                lastAddedPaymentInfo = { clientName: client.name, payment: paymentForReceipt };
+                document.getElementById('receiptOptionsModal').style.display = 'flex';
+            }
+        } catch (err) {
+            console.error('فشل مزامنة إدخال الذمة:', err);
+            showNotification('تم الحفظ محلياً، ولكن فشلت المزامنة السحابية', 'error');
+        }
+        loadLedger();
+        loadClientsList();
+        updateDashboard();
+        document.getElementById('ledger-client-search').value = '';
+        document.getElementById('ledger-amount').value = '';
+        document.getElementById('ledger-reason').value = '';
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
     }
-    loadLedger();
-    loadClientsList();
-    updateDashboard();
-    document.getElementById('ledger-client-search').value = '';
-    document.getElementById('ledger-amount').value = '';
-    document.getElementById('ledger-reason').value = '';
 }
 
 async function editLedgerAdjustment(clientName, adjustmentId) {
@@ -3806,135 +3856,165 @@ function calculateInventoryItemWeight(row) {
 }
 
 async function saveInventoryEntries() {
-    const movementType = document.getElementById('inventory-movement-type').value;
-    const rows = document.querySelectorAll('#inventory-entries-body tr');
-    const entriesToAdd = [];
-    let totalWeightAdded = 0;
-
-    if (rows.length === 0) {
-        showNotification('لا توجد بنود لإضافتها.', 'error');
-        return;
-    }
-
-    rows.forEach(row => {
-        const productName = row.querySelector('.product-name').value;
-        const manualWeightInput = row.querySelector('.manual-weight');
-
-        if (productName === '--manual-weight--' && manualWeightInput) {
-            const manualWeight = parseFloat(manualWeightInput.value) || 0;
-            if (manualWeight > 0) {
-                totalWeightAdded += manualWeight;
-            }
-        } else {
-            const quantity = parseInt(row.querySelector('.quantity')?.value, 10) || 0;
-            const calculatedWeight = parseFloat(row.querySelector('.calculated-weight').textContent) || 0;
-
-            if (productName && quantity > 0) {
-                if (calculatedWeight > 0) {
-                    totalWeightAdded += calculatedWeight;
-                }
-            }
-        }
-    });
-    
-    if (totalWeightAdded > 0) {
-        entriesToAdd.push({ id: `inv_entry_${Date.now()}_iron`, date: new Date().toISOString(), type: movementType, itemName: 'حديد', quantity: totalWeightAdded, unit: 'كجم' });
-    }
-
-    if (entriesToAdd.length === 0) {
-        showNotification('لا توجد أوزان صالحة للحفظ.', 'error');
-        return;
-    }
-
-    weeklyInventoryEntries.push(...entriesToAdd);
-    saveInventoryEntriesToStorage();
+    const saveBtn = document.getElementById('save-inventory-entries');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
     try {
-        for (const entry of entriesToAdd) { await sendToCloud({ action: 'saveInventoryEntry', entry: entry }); }
-        showNotification('تم حفظ المدخلات ومزامنتها بنجاح', 'success');
-    } catch (err) { showNotification('تم حفظ المدخلات محلياً، لكن فشلت المزامنة', 'error'); }
+        const movementType = document.getElementById('inventory-movement-type').value;
+        const rows = document.querySelectorAll('#inventory-entries-body tr');
+        const entriesToAdd = [];
+        let totalWeightAdded = 0;
 
-    document.getElementById('inventory-entries-body').innerHTML = '';
-    inventoryItemCount = 0;
-    loadWeeklyInventorySection();
+        if (rows.length === 0) {
+            showNotification('لا توجد بنود لإضافتها.', 'error');
+            return;
+        }
+
+        rows.forEach(row => {
+            const productName = row.querySelector('.product-name').value;
+            const manualWeightInput = row.querySelector('.manual-weight');
+
+            if (productName === '--manual-weight--' && manualWeightInput) {
+                const manualWeight = parseFloat(manualWeightInput.value) || 0;
+                if (manualWeight > 0) {
+                    totalWeightAdded += calculatedWeight;
+                }
+            } else {
+                const quantity = parseInt(row.querySelector('.quantity')?.value, 10) || 0;
+                const calculatedWeight = parseFloat(row.querySelector('.calculated-weight').textContent) || 0;
+
+                if (productName && quantity > 0) {
+                    if (calculatedWeight > 0) {
+                        totalWeightAdded += calculatedWeight;
+                    }
+                }
+            }
+        });
+
+        if (totalWeightAdded > 0) {
+            entriesToAdd.push({ id: `inv_entry_${Date.now()}_iron`, date: new Date().toISOString(), type: movementType, itemName: 'حديد', quantity: totalWeightAdded, unit: 'كجم' });
+        }
+
+        if (entriesToAdd.length === 0) {
+            showNotification('لا توجد أوزان صالحة للحفظ.', 'error');
+            return;
+        }
+
+        weeklyInventoryEntries.push(...entriesToAdd);
+        saveInventoryEntriesToStorage();
+
+        try {
+            for (const entry of entriesToAdd) { await sendToCloud({ action: 'saveInventoryEntry', entry: entry }); }
+            showNotification('تم حفظ المدخلات ومزامنتها بنجاح', 'success');
+        } catch (err) { showNotification('تم حفظ المدخلات محلياً، لكن فشلت المزامنة', 'error'); }
+
+        document.getElementById('inventory-entries-body').innerHTML = '';
+        inventoryItemCount = 0;
+        loadWeeklyInventorySection();
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
+    }
 }
 
 async function saveScrapSale() {
-    const scrapWeight = parseFloat(document.getElementById('scrapsale-weight').value) || 0;
-    const price = parseFloat(document.getElementById('scrapsale-price').value) || 0;
-    const notes = document.getElementById('scrapsale-notes').value.trim();
-
-    if (scrapWeight <= 0) {
-        showNotification('يرجى إدخال وزن صحيح للسكراب المباع.', 'error');
-        return;
-    }
-
-    let fullNotes = notes;
-    if (price > 0) {
-        fullNotes = `السعر: ${price.toFixed(2)} دينار. ${notes}`;
-    }
-
-    const entry = {
-        id: `inv_entry_${Date.now()}_scrapsale`,
-        date: new Date().toISOString(),
-        type: 'scrap', // This type is correctly handled as a reduction in the report
-        itemName: 'سكراب',
-        quantity: scrapWeight,
-        unit: 'كجم',
-        notes: fullNotes || 'بيع سكراب'
-    };
-
-    weeklyInventoryEntries.push(entry);
-    saveInventoryEntriesToStorage();
+    const saveBtn = document.getElementById('save-scrapsale-entry');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
     try {
-        await sendToCloud({ action: 'saveInventoryEntry', entry: entry });
-        showNotification('تم حفظ عملية بيع السكراب ومزامنتها بنجاح', 'success');
-    } catch (err) {
-        showNotification('تم حفظ العملية محلياً، لكن فشلت المزامنة', 'error');
-    }
+        const scrapWeight = parseFloat(document.getElementById('scrapsale-weight').value) || 0;
+        const price = parseFloat(document.getElementById('scrapsale-price').value) || 0;
+        const notes = document.getElementById('scrapsale-notes').value.trim();
 
-    document.getElementById('scrapsale-weight').value = '';
-    document.getElementById('scrapsale-price').value = '';
-    document.getElementById('scrapsale-notes').value = '';
-    
-    loadWeeklyInventorySection();
+        if (scrapWeight <= 0) {
+            showNotification('يرجى إدخال وزن صحيح للسكراب المباع.', 'error');
+            return;
+        }
+
+        let fullNotes = notes;
+        if (price > 0) {
+            fullNotes = `السعر: ${price.toFixed(2)} دينار. ${notes}`;
+        }
+
+        const entry = {
+            id: `inv_entry_${Date.now()}_scrapsale`,
+            date: new Date().toISOString(),
+            type: 'scrap', // This type is correctly handled as a reduction in the report
+            itemName: 'سكراب',
+            quantity: scrapWeight,
+            unit: 'كجم',
+            notes: fullNotes || 'بيع سكراب'
+        };
+
+        weeklyInventoryEntries.push(entry);
+        saveInventoryEntriesToStorage();
+
+        try {
+            await sendToCloud({ action: 'saveInventoryEntry', entry: entry });
+            showNotification('تم حفظ عملية بيع السكراب ومزامنتها بنجاح', 'success');
+        } catch (err) {
+            showNotification('تم حفظ العملية محلياً، لكن فشلت المزامنة', 'error');
+        }
+
+        document.getElementById('scrapsale-weight').value = '';
+        document.getElementById('scrapsale-price').value = '';
+        document.getElementById('scrapsale-notes').value = '';
+
+        loadWeeklyInventorySection();
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
+    }
 }
 
 async function saveShipmentEntry() {
-    const totalWeight = parseFloat(document.getElementById('shipment-weight').value) || 0;
-    const notes = document.getElementById('shipment-notes').value.trim();
-    const entriesToAdd = [];
-
-    if (totalWeight > 0) {
-        entriesToAdd.push({
-            id: `inv_entry_${Date.now()}_shipment`,
-            date: new Date().toISOString(),
-            type: 'incoming',
-            itemName: 'حديد',
-            quantity: totalWeight,
-            unit: 'كجم',
-            notes: notes || 'شحنة واردة'
-        });
-    }
-
-    if (entriesToAdd.length === 0) {
-        showNotification('يرجى إدخال الوزن الإجمالي للشحنة.', 'error');
-        return;
-    }
-
-    weeklyInventoryEntries.push(...entriesToAdd);
-    saveInventoryEntriesToStorage();
+    const saveBtn = document.getElementById('save-shipment-entry');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
     try {
-        for (const entry of entriesToAdd) { await sendToCloud({ action: 'saveInventoryEntry', entry: entry }); }
-        showNotification('تم حفظ الشحنة ومزامنتها بنجاح', 'success');
-    } catch (err) { showNotification('تم حفظ الشحنة محلياً، لكن فشلت المزامنة', 'error'); }
+        const totalWeight = parseFloat(document.getElementById('shipment-weight').value) || 0;
+        const notes = document.getElementById('shipment-notes').value.trim();
+        const entriesToAdd = [];
 
-    document.getElementById('shipment-weight').value = '';
-    document.getElementById('shipment-notes').value = '';
-    
-    loadWeeklyInventorySection();
+        if (totalWeight > 0) {
+            entriesToAdd.push({
+                id: `inv_entry_${Date.now()}_shipment`,
+                date: new Date().toISOString(),
+                type: 'incoming',
+                itemName: 'حديد',
+                quantity: totalWeight,
+                unit: 'كجم',
+                notes: notes || 'شحنة واردة'
+            });
+        }
+
+        if (entriesToAdd.length === 0) {
+            showNotification('يرجى إدخال الوزن الإجمالي للشحنة.', 'error');
+            return;
+        }
+
+        weeklyInventoryEntries.push(...entriesToAdd);
+        saveInventoryEntriesToStorage();
+
+        try {
+            for (const entry of entriesToAdd) { await sendToCloud({ action: 'saveInventoryEntry', entry: entry }); }
+            showNotification('تم حفظ الشحنة ومزامنتها بنجاح', 'success');
+        } catch (err) { showNotification('تم حفظ الشحنة محلياً، لكن فشلت المزامنة', 'error'); }
+
+        document.getElementById('shipment-weight').value = '';
+        document.getElementById('shipment-notes').value = '';
+
+        loadWeeklyInventorySection();
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
+    }
 }
 
 function printInventoryReport() {
@@ -4323,74 +4403,84 @@ function setupDriverLoadTypeToggle() {
 }
 
 async function saveDriverWage() {
-    const date = document.getElementById('driver-date').value;
-    const driverNameInput = document.getElementById('driver-name');
-    const driverName = driverNameInput.value.trim();
-    const from = document.getElementById('driver-from').value.trim();
-    const to = document.getElementById('driver-to').value.trim();
-    const loadType = document.getElementById('driver-load-type').value;
-    const cost = parseFloat(document.getElementById('driver-cost').value) || 0;
-
-    // متغيرات الحمولة
-    let tonnage = null;
-    let description = '';
-    if (loadType === 'iron') {
-        const weightInKg = parseFloat(document.getElementById('driver-weight-kg').value) || 0;
-        if (weightInKg <= 0) {
-            showNotification('يرجى إدخال وزن الحديد بالكيلوجرام (قيمة موجبة).', 'error');
-            return;
-        }
-        tonnage = weightInKg / 1000; // تحويل من كجم إلى طن
-    } else {
-        description = document.getElementById('driver-description').value.trim();
-        if (!description) {
-            showNotification('يرجى إدخال وصف للبضاعة المنقولة.', 'error');
-            return;
-        }
-    }
-
-    if (!driverName || cost <= 0 || !date) {
-        showNotification('يرجى إدخال اسم السائق، قيمة الأجرة، والتاريخ.', 'error');
-        return;
-    }
-
-    // توليد رقم نقلة فريد
-    const tripNumber = generateTripNumber();
-
-    const wage = {
-        id: `wage_${Date.now()}`,
-        tripNumber: tripNumber,
-        date: new Date(date + 'T12:00:00').toISOString(),
-        driverName: driverName,
-        from: from || 'غير محدد',
-        to: to || 'غير محدد',
-        loadType: loadType,
-        tonnage: tonnage,
-        description: description,
-        cost: cost
-    };
-
-    driverWages.push(wage);
-    localStorage.setItem('driverWages', JSON.stringify(driverWages));
+    const saveBtn = document.getElementById('save-driver-wage');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
     try {
-        await sendToCloud({ action: 'saveDriverWage', wage: wage });
-        showNotification('تم حفظ النقلة بنجاح', 'success');
-    } catch (err) {
-        showNotification('تم الحفظ محلياً، لكن فشلت المزامنة.', 'error');
+        const date = document.getElementById('driver-date').value;
+        const driverNameInput = document.getElementById('driver-name');
+        const driverName = driverNameInput.value.trim();
+        const from = document.getElementById('driver-from').value.trim();
+        const to = document.getElementById('driver-to').value.trim();
+        const loadType = document.getElementById('driver-load-type').value;
+        const cost = parseFloat(document.getElementById('driver-cost').value) || 0;
+
+        // متغيرات الحمولة
+        let tonnage = null;
+        let description = '';
+        if (loadType === 'iron') {
+            const weightInKg = parseFloat(document.getElementById('driver-weight-kg').value) || 0;
+            if (weightInKg <= 0) {
+                showNotification('يرجى إدخال وزن الحديد بالكيلوجرام (قيمة موجبة).', 'error');
+                return;
+            }
+            tonnage = weightInKg / 1000; // تحويل من كجم إلى طن
+        } else {
+            description = document.getElementById('driver-description').value.trim();
+            if (!description) {
+                showNotification('يرجى إدخال وصف للبضاعة المنقولة.', 'error');
+                return;
+            }
+        }
+
+        if (!driverName || cost <= 0 || !date) {
+            showNotification('يرجى إدخال اسم السائق، قيمة الأجرة، والتاريخ.', 'error');
+            return;
+        }
+
+        // توليد رقم نقلة فريد
+        const tripNumber = generateTripNumber();
+
+        const wage = {
+            id: `wage_${Date.now()}`,
+            tripNumber: tripNumber,
+            date: new Date(date + 'T12:00:00').toISOString(),
+            driverName: driverName,
+            from: from || 'غير محدد',
+            to: to || 'غير محدد',
+            loadType: loadType,
+            tonnage: tonnage,
+            description: description,
+            cost: cost
+        };
+
+        driverWages.push(wage);
+        localStorage.setItem('driverWages', JSON.stringify(driverWages));
+
+        try {
+            await sendToCloud({ action: 'saveDriverWage', wage: wage });
+            showNotification('تم حفظ النقلة بنجاح', 'success');
+        } catch (err) {
+            showNotification('تم الحفظ محلياً، لكن فشلت المزامنة.', 'error');
+        }
+
+        // مسح الحقول مع الاحتفاظ بالتاريخ
+        driverNameInput.value = '';
+        document.getElementById('driver-from').value = '';
+        document.getElementById('driver-to').value = '';
+        document.getElementById('driver-cost').value = '';
+        document.getElementById('driver-weight-kg').value = '';
+        document.getElementById('driver-description').value = '';
+
+        loadDriverAccounts();
+        loadDriverWages();
+        loadReports(); // لتحديث التقارير اليومية/الأسبوعية
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
     }
-
-    // مسح الحقول مع الاحتفاظ بالتاريخ
-    driverNameInput.value = '';
-    document.getElementById('driver-from').value = '';
-    document.getElementById('driver-to').value = '';
-    document.getElementById('driver-cost').value = '';
-    document.getElementById('driver-weight-kg').value = '';
-    document.getElementById('driver-description').value = '';
-
-    loadDriverAccounts();
-    loadDriverWages();
-    loadReports(); // لتحديث التقارير اليومية/الأسبوعية
 }
 
 function loadDriverWages() {
@@ -4545,37 +4635,47 @@ function showAddPaymentToDriverModal(driverName) {
 }
 
 async function saveDriverPayment() {
-    const amount = parseFloat(document.getElementById('driver-payment-amount').value) || 0;
-    const date = document.getElementById('driver-payment-date').value;
-    const notes = document.getElementById('driver-payment-notes').value.trim();
-
-    if (!currentPayingDriver || amount <= 0 || !date) {
-        showNotification('يرجى إدخال مبلغ وتاريخ صحيحين.', 'error');
-        return;
-    }
-
-    const payment = {
-        id: `dp_${Date.now()}`,
-        driverName: currentPayingDriver,
-        amount: amount,
-        date: new Date(date + 'T12:00:00').toISOString(),
-        notes: notes
-    };
-
-    driverPayments.push(payment);
-    localStorage.setItem('driverPayments', JSON.stringify(driverPayments));
+    const saveBtn = document.getElementById('save-driver-payment-btn');
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
     try {
-        await sendToCloud({ action: 'saveDriverPayment', payment: payment });
-        showNotification('تم حفظ الدفعة بنجاح.', 'success');
-    } catch (err) {
-        showNotification('تم الحفظ محلياً، لكن فشلت المزامنة.', 'error');
-    }
+        const amount = parseFloat(document.getElementById('driver-payment-amount').value) || 0;
+        const date = document.getElementById('driver-payment-date').value;
+        const notes = document.getElementById('driver-payment-notes').value.trim();
 
-    document.getElementById('driverPaymentModal').style.display = 'none';
-    currentPayingDriver = null;
-    loadDriverAccounts();
-    loadReports();
+        if (!currentPayingDriver || amount <= 0 || !date) {
+            showNotification('يرجى إدخال مبلغ وتاريخ صحيحين.', 'error');
+            return;
+        }
+
+        const payment = {
+            id: `dp_${Date.now()}`,
+            driverName: currentPayingDriver,
+            amount: amount,
+            date: new Date(date + 'T12:00:00').toISOString(),
+            notes: notes
+        };
+
+        driverPayments.push(payment);
+        localStorage.setItem('driverPayments', JSON.stringify(driverPayments));
+
+        try {
+            await sendToCloud({ action: 'saveDriverPayment', payment: payment });
+            showNotification('تم حفظ الدفعة بنجاح.', 'success');
+        } catch (err) {
+            showNotification('تم الحفظ محلياً، لكن فشلت المزامنة.', 'error');
+        }
+
+        document.getElementById('driverPaymentModal').style.display = 'none';
+        currentPayingDriver = null;
+        loadDriverAccounts();
+        loadReports();
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
+    }
 }
 
 function viewDriverStatement(driverName) {
