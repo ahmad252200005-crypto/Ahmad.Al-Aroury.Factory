@@ -20,7 +20,7 @@ const FACTORY_PHONE = "0795704514 - 0797083878";
 
 // كلمات المرور
 const DELETE_PASSWORD = "2522005";
-const PRODUCT_EDIT_PASSWORD = "2522005";
+const EDIT_PASSWORD = "1234";
 
 // ============================================================
 // 2. دوال مساعدة عامة
@@ -653,8 +653,8 @@ function updateModalProductWeight() {
 }
 
 function openProductModal() {
-    const enteredPassword = prompt('للوصول إلى إدارة المنتجات، يرجى إدخال كلمة المرور:');
-    if (enteredPassword !== PRODUCT_EDIT_PASSWORD) {
+    const enteredPassword = prompt('للوصول إلى إدارة المنتجات (تعديل/إضافة)، يرجى إدخال كلمة المرور:');
+    if (enteredPassword !== EDIT_PASSWORD) {
         if (enteredPassword !== null) {
             showNotification('كلمة المرور غير صحيحة', 'error');
         }
@@ -747,7 +747,13 @@ function populateProductEditorList(filter = '') {
         deleteBtn.className = 'btn btn-danger';
         deleteBtn.title = 'حذف المنتج';
         deleteBtn.onclick = () => {
-            if (confirm(`هل أنت متأكد من حذف المنتج "${product.name}"؟`)) {
+            const password = prompt(`لحذف المنتج "${product.name}"، يرجى إدخال كلمة المرور:`);
+            if (password !== DELETE_PASSWORD) {
+                if (password !== null) showNotification('كلمة المرور غير صحيحة', 'error');
+                return;
+            }
+
+            if (confirm(`تأكيد نهائي لحذف المنتج "${product.name}"؟`)) {
                 products = products.filter(p => p.name !== product.name);
                 saveProducts();
                 populateProductEditorList(document.getElementById('modal-product-search').value);
@@ -1301,6 +1307,11 @@ async function saveInvoice() {
     }
 }
 function editInvoice(invoiceId) {
+    const password = prompt('لتعديل طلب البيع، يرجى إدخال كلمة المرور:');
+    if (password !== EDIT_PASSWORD) {
+        if (password !== null) showNotification('كلمة المرور غير صحيحة', 'error');
+        return;
+    }
     const invoiceIndex = invoices.findIndex(inv => inv.id === invoiceId);
     if (invoiceIndex === -1) {
         showNotification('لم يتم العثور على طلب البيع', 'error');
@@ -1584,29 +1595,57 @@ async function saveClient() {
             return;
         }
         if (editingClientName) {
-            const clientToEdit = clients.find(client => client.name === editingClientName);
+            const oldName = editingClientName;
+            const clientToEdit = clients.find(client => client.name === oldName);
             if (!clientToEdit) {
                 showNotification('لم يتم العثور على العميل المطلوب', 'error');
                 return;
             }
+
+            // Find invoices before changing names
+            const invoicesToUpdate = invoices.filter(inv => inv.client && inv.client.name === oldName);
+
+            // Update local data
             clientToEdit.name = name;
             clientToEdit.address = address;
             clientToEdit.phone = phone;
-            invoices.forEach(invoice => {
-                if (invoice.client && invoice.client.name === editingClientName) {
-                    invoice.client.name = name;
-                    invoice.client.address = address;
-                    invoice.client.phone = phone;
+            
+            invoicesToUpdate.forEach(invoice => {
+                invoice.client.name = name;
+                invoice.client.address = address;
+                invoice.client.phone = phone;
+            });
+
+            purchaseHistory.forEach(purchase => {
+                if (purchase.clientName === oldName) {
+                    purchase.clientName = name;
                 }
             });
-            purchaseHistory.forEach(purchase => {
-                if (purchase.clientName === editingClientName) purchase.clientName = name;
-            });
+
+            // Recalculate balance for the client
+            const recalculateBalanceFor = (targetClient) => {
+                if (!targetClient) return;
+                let totalRemaining = 0;
+                invoices.filter(inv => inv.client.name === targetClient.name).forEach(inv => {
+                    totalRemaining += (inv.payment.remainingBalance || 0);
+                });
+                const totalAdjustments = (targetClient.adjustments || []).reduce((sum, adj) => sum + adj.amount, 0);
+                targetClient.balance = totalRemaining + totalAdjustments;
+            };
+            recalculateBalanceFor(clientToEdit);
+
+            // Save to local storage
             localStorage.setItem('invoices', JSON.stringify(invoices));
             localStorage.setItem('purchaseHistory', JSON.stringify(purchaseHistory));
             localStorage.setItem('clients', JSON.stringify(clients));
+
             try {
+                // Sync with cloud
                 await sendToCloud({ action: 'saveClient', client: clientToEdit });
+                for (const invoice of invoicesToUpdate) {
+                    await sendToCloud({ action: 'saveInvoice', invoice: invoice });
+                }
+                
                 await fetchCloudData();
                 showNotification('تم تعديل العميل بنجاح');
             } catch (err) {
@@ -1677,6 +1716,11 @@ function loadClientsList() {
             showAddPaymentForClient(this.getAttribute('data-client-name'));
         });
         item.querySelector('.edit-client').addEventListener('click', function() {
+            const password = prompt('لتعديل بيانات العميل، يرجى إدخال كلمة المرور:');
+            if (password !== EDIT_PASSWORD) {
+                if (password !== null) showNotification('كلمة المرور غير صحيحة', 'error');
+                return;
+            }
             const clientName = this.getAttribute('data-client-name');
             const clientToEdit = clients.find(client => client.name === clientName);
             if (clientToEdit) {
@@ -2836,6 +2880,13 @@ function printSalary() {
 }
 
 async function saveSalary() {
+    if (editingSalaryId) {
+        const password = prompt('لتعديل كشف الراتب، يرجى إدخال كلمة المرور:');
+        if (password !== EDIT_PASSWORD) {
+            if (password !== null) showNotification('كلمة المرور غير صحيحة', 'error');
+            return;
+        }
+    }
     const saveBtn = document.getElementById('save-salary');
     const originalHtml = saveBtn.innerHTML;
     saveBtn.disabled = true;
@@ -2888,6 +2939,12 @@ async function saveSalary() {
 }
 
 function editSalary(salaryId) {
+    const password = prompt('لتحميل بيانات كشف الراتب للتعديل، يرجى إدخال كلمة المرور:');
+    if (password !== EDIT_PASSWORD) {
+        if (password !== null) showNotification('كلمة المرور غير صحيحة', 'error');
+        return;
+    }
+
     const salary = employeeSalaries.find(s => s.id === salaryId);
     if (!salary) return;
     document.querySelector('.tab[data-tab="employees"]').click();
@@ -2946,7 +3003,13 @@ function printSalaryItem(salaryId) {
 }
 
 async function deleteSalary(salaryId) {
-    if (!confirm('هل أنت متأكد من حذف كشف الراتب هذا؟')) return;
+    const password = prompt('لحذف كشف الراتب، يرجى إدخال كلمة المرور:');
+    if (password !== DELETE_PASSWORD) {
+        if (password !== null) showNotification('كلمة المرور غير صحيحة', 'error');
+        return;
+    }
+
+    if (!confirm('تأكيد نهائي لحذف كشف الراتب هذا؟')) return;
     employeeSalaries = employeeSalaries.filter(s => s.id !== salaryId);
     localStorage.setItem('employeeSalaries', JSON.stringify(employeeSalaries));
     try {
@@ -3543,7 +3606,7 @@ async function addLedgerEntry() {
 
 async function editLedgerAdjustment(clientName, adjustmentId) {
     const enteredPassword = prompt('لتعديل هذا الإدخال، يرجى إدخال كلمة المرور:', '');
-    if (enteredPassword !== PRODUCT_EDIT_PASSWORD) {
+    if (enteredPassword !== EDIT_PASSWORD) {
         if (enteredPassword !== null) showNotification('كلمة المرور غير صحيحة', 'error');
         return;
     }
@@ -3717,9 +3780,8 @@ function saveInventoryEntriesToStorage() {
 }
 async function deleteInventoryEntry(entryId) {
     if (confirm('هل أنت متأكد من حذف هذه الحركة؟')) {
-        // طلب كلمة المرور
         const password = prompt('يرجى إدخال كلمة المرور لحذف الحركة:');
-        if (password !== PRODUCT_EDIT_PASSWORD) {
+        if (password !== DELETE_PASSWORD) {
             showNotification('كلمة المرور غير صحيحة', 'error');
             return;
         }
