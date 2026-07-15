@@ -16,6 +16,18 @@
     <!-- الإشعارات -->
     <div class="notification" id="notification"></div>
     
+    <!-- نافذة كلمة المرور عند بدء التشغيل -->
+    <div class="modal" id="startupPasswordModal" style="display: flex; z-index: 1001;">
+        <div class="modal-content">
+            <h3>مطلوب كلمة مرور</h3>
+            <p>الرجاء إدخال كلمة المرور للوصول إلى النظام.</p>
+            <input type="password" class="modal-input" id="startupPasswordInput" placeholder="أدخل كلمة المرور هنا">
+            <div class="modal-actions">
+                <button class="btn btn-success" id="submitStartupPassword">دخول</button>
+            </div>
+        </div>
+    </div>
+
     <!-- نافذة تأكيد الحذف -->
     <div class="modal" id="deleteModal">
         <div class="modal-content">
@@ -871,5 +883,53 @@
 
     <!-- ربط ملف الجافا سكريبت الخارجي -->
     <script src="script.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const startupModal = document.getElementById('startupPasswordModal');
+            const passwordInput = document.getElementById('startupPasswordInput');
+            const submitButton = document.getElementById('submitStartupPassword');
+            const mainContainer = document.querySelector('.container');
+            const correctPassword = "111";
+
+            // Prevent interaction with the background
+            document.body.style.overflow = 'hidden';
+            if (mainContainer) {
+                mainContainer.style.filter = 'blur(4px)';
+            }
+
+            const checkPassword = () => {
+                if (passwordInput.value === correctPassword) {
+                    startupModal.style.display = 'none';
+                    if (mainContainer) {
+                        mainContainer.style.filter = 'none';
+                    }
+                    document.body.style.overflow = 'auto';
+                } else {
+                    let errorP = startupModal.querySelector('.error-message');
+                    if (!errorP) {
+                        errorP = document.createElement('p');
+                        errorP.className = 'error-message';
+                        errorP.style.color = 'red';
+                        errorP.style.marginTop = '10px';
+                        const modalActions = startupModal.querySelector('.modal-actions');
+                        modalActions.parentNode.insertBefore(errorP, modalActions);
+                    }
+                    errorP.textContent = 'كلمة المرور غير صحيحة. الرجاء المحاولة مرة أخرى.';
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                }
+            };
+
+            submitButton.addEventListener('click', checkPassword);
+            passwordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    checkPassword();
+                }
+            });
+
+            // Focus on input on load
+            passwordInput.focus();
+        });
+    </script>
 </body>
 </html>
