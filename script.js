@@ -368,29 +368,20 @@ let lastInvoiceNumber = JSON.parse(localStorage.getItem('lastInvoiceNumber')) ||
 // 6. دوال إدارة المنتجات (الأساسية)
 // ============================================================
 
-function initializeDefaultProducts() {
-    
-    const productMap = new Map();
-    defaultProducts.forEach(p => {
-        if (!productMap.has(p.name)) {
-            productMap.set(p.name, p);
-        }
-    });
-    return Array.from(productMap.values());
-}
-
 function loadProducts() {
     try {
         const storedProducts = JSON.parse(localStorage.getItem('products'));
-        if (storedProducts && Array.isArray(storedProducts) && storedProducts.length > 0) {
+        // إذا كانت المنتجات موجودة في التخزين المحلي وهي مصفوفة، استخدمها
+        if (storedProducts && Array.isArray(storedProducts)) {
             products = storedProducts;
         } else {
-            products = initializeDefaultProducts();
+            // وإلا، ابدأ بقائمة فارغة من المنتجات واحفظ هذه الحالة
+            products = [];
             saveProducts();
         }
     } catch (e) {
-        console.error("Failed to load products, initializing defaults.", e);
-        products = initializeDefaultProducts();
+        console.error("فشل تحميل المنتجات، سيتم البدء بقائمة فارغة.", e);
+        products = [];
     }
 }
 
