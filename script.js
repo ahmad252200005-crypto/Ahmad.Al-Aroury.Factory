@@ -573,9 +573,8 @@ function renumberRows() {
         row.cells[0].textContent = productCount;
     });
 }
-
 function calculateTotals() {
-    let subtotal = 0, totalDiscount = 0, totalTax = 0, grandTotal = 0;
+    let subtotal = 0, totalDiscount = 0, grandTotal = 0;
     const rows = document.querySelectorAll('#products-body tr');
 
     rows.forEach(row => {
@@ -583,26 +582,20 @@ function calculateTotals() {
         const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
         const price = parseFloat(row.querySelector('.price').value) || 0;
         const discount = parseFloat(row.querySelector('.discount').value) || 0;
+        const rowTotal = parseFloat(row.querySelector('.total').textContent) || 0;
 
         const rowSubtotal = price * quantity;
         const discountAmount = (rowSubtotal * discount) / 100;
-        const priceAfterDiscount = rowSubtotal - discountAmount;
-
-        const taxRate = 16;
-        const taxAmount = priceAfterDiscount * (taxRate / 100);
 
         subtotal += rowSubtotal;
         totalDiscount += discountAmount;
-        totalTax += taxAmount;
-        grandTotal += (priceAfterDiscount + taxAmount);
+        grandTotal += rowTotal; // rowTotal محسوب مسبقاً بعد الخصم
     });
 
     document.getElementById('subtotal').textContent = subtotal.toFixed(2);
     document.getElementById('total-discount').textContent = totalDiscount.toFixed(2);
-    document.getElementById('total-tax').textContent = totalTax.toFixed(2);
     document.getElementById('grand-total').textContent = grandTotal.toFixed(2);
 }
-
 // ============================================================
 // 8. دوال إدارة المنتجات (النافذة المنبثقة)
 // ============================================================
@@ -1130,7 +1123,6 @@ async function saveInvoice() {
         let paymentData = {};
         const grandTotal = parseFloat(document.getElementById('grand-total').textContent) || 0;
         
-        // إصلاح 1: تم فصل الرصيد السابق عن المبلغ المتبقي للفاتورة لكي لا يتضاعف الرصيد
         if (document.getElementById('enable-multiple-payments').checked) {
             const payments = [];
             let totalPaid = 0;
@@ -1169,7 +1161,6 @@ async function saveInvoice() {
             products: productsData,
             subtotal: parseFloat(document.getElementById('subtotal').textContent) || 0,
             totalDiscount: parseFloat(document.getElementById('total-discount').textContent) || 0,
-            totalTax: parseFloat(document.getElementById('total-tax').textContent) || 0,
             grandTotal: grandTotal,
             payment: paymentData,
             status: paymentData.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة'
@@ -1195,7 +1186,6 @@ async function saveInvoice() {
             client.phone = clientPhone;
         }
 
-        // مسح الفاتورة القديمة من الذاكرة المحلية لتجنب التكرار
         if (editingInvoiceId && editingInvoiceSnapshot) {
             const oldClient = clients.find(c => c.name === editingInvoiceSnapshot.client.name);
             if (oldClient && oldClient.payments) {
@@ -1228,7 +1218,6 @@ async function saveInvoice() {
             }
         }
 
-        // إصلاح 2: إعادة احتساب رصيد العميل بشكل آمن ودقيق بدلاً من الزيادة والنقصان العشوائي
         const recalculateBalanceFor = (targetClient) => {
             let totalRemaining = 0;
             invoices.filter(inv => inv.client.name === targetClient.name).forEach(inv => {
@@ -1255,9 +1244,6 @@ async function saveInvoice() {
         try {
             await sendToCloud({ action: 'saveClient', client: client });
             await sendToCloud({ action: 'saveInvoice', invoice: invoice });
-            
-            // إصلاح 3: تم حذف دالة الحذف السحابي لأن الحفظ بالـ ID الثابت يقوم بعمل Update وتحديث تلقائي دون إخفاء الفاتورة
-            
             await fetchCloudData();
             showNotification(editingInvoiceId ? 'تم تعديل طلب البيع بنجاح' : 'تم حفظ طلب البيع بنجاح');
         } catch (err) {
@@ -1387,7 +1373,6 @@ function resetInvoiceForm() {
     document.getElementById('client-balance-info').style.display = 'none';
     document.getElementById('subtotal').textContent = '0.00';
     document.getElementById('total-discount').textContent = '0.00';
-    document.getElementById('total-tax').textContent = '0.00';
     document.getElementById('grand-total').textContent = '0.00';
     updatePaymentBalance();
     productCount = 0;
@@ -2136,7 +2121,6 @@ function buildOfficialHeader(documentTitle) {
         <h2 class="document-title-print">${escapeHtml(documentTitle)}</h2>
     `;
 }
-
 function buildInvoicePrintBody(invoice) {
     const productsRows = (invoice.products || []).map(product => {
         return `<tr>
@@ -2210,7 +2194,6 @@ function buildInvoicePrintBody(invoice) {
         </div>
     </div>`;
 }
-
 function printInvoiceRecord(invoice) {
     const bodyHtml = buildInvoicePrintBody(invoice);
     openProfessionalPrintWindow(`طلب بيع ${invoice.id}`, bodyHtml);
@@ -5161,18 +5144,15 @@ function getCurrentInvoiceFromForm() {
     const invoice = {
         id: invoiceId,
         date: invoiceDate ? new Date(invoiceDate + 'T12:00:00').toISOString() : new Date().toISOString(),
-        client: { name: document.getElementById('client-name').value || '', address: document.getElementById('client-address').value || '', phone: document.getElementById('client-phone').value || '' },
         products: Array.from(document.querySelectorAll('#products-body tr')).map(row => ({ productName: row.querySelector('.product-name')?.value || '', thickness: row.querySelector('.thickness')?.value || 0, quantity: parseFloat(row.querySelector('.quantity')?.value) || 0, price: parseFloat(row.querySelector('.price')?.value) || 0, total: parseFloat(row.querySelector('.total')?.textContent) || 0 })).filter(item => item.productName),
         subtotal: parseFloat(document.getElementById('subtotal').textContent) || 0,
         totalDiscount: parseFloat(document.getElementById('total-discount').textContent) || 0,
-        totalTax: parseFloat(document.getElementById('total-tax').textContent) || 0,
         grandTotal: grandTotal,
         payment: paymentData,
         status: paymentData.remainingBalance > 0 ? 'غير مدفوعة بالكامل' : 'مدفوعة'
     };
     return invoice;
 }
-
 // ============================================================
 // 36. إعداد التبويبات
 // ============================================================
