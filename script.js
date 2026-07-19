@@ -369,28 +369,7 @@ let lastInvoiceNumber = JSON.parse(localStorage.getItem('lastInvoiceNumber')) ||
 // ============================================================
 
 function initializeDefaultProducts() {
-    const defaultProducts = [
-        { name: "زاوية", width: 4.15, length: 300, isSteel: true },
-        { name: "زوايا", width: 4.15, length: 300, isSteel: true },
-        { name: "تركات", width: null, length: null, isSteel: false },
-        { name: "امقاا", width: 9, length: 300, isSteel: true },
-        { name: "امقا", width: 9, length: 300, isSteel: true },
-        { name: "سي شانل", width: 5.7, length: 300, isSteel: true },
-        { name: "سي شانل ٥.٧", width: 5.7, length: 300, isSteel: true },
-        { name: "سي شانل 5.7", width: 5.7, length: 300, isSteel: true },
-        { name: "سي شانل ٥.٨", width: 5.8, length: 300, isSteel: true },
-        { name: "سي شانل 5.8", width: 5.8, length: 300, isSteel: true },
-        { name: "ستاد", width: 12, length: 300, isSteel: true },
-        { name: "ستاد ١٢", width: 12, length: 300, isSteel: true },
-        { name: "ستاد 12", width: 12, length: 300, isSteel: true },
-        { name: "ستاد ١٢.٢", width: 12.2, length: 300, isSteel: true },
-        { name: "ستاد 12.2", width: 12.2, length: 300, isSteel: true },
-        { name: "زاويه الظل", width: null, length: null, isSteel: false },
-        { name: "ألواح جبسمبورد أبيض", width: null, length: null, isSteel: false },
-        { name: "ألواح جبسمبورد أخضر", width: null, length: null, isSteel: false },
-        { name: "بضائع أخوة متنوعة", width: null, length: null, isSteel: false },
-        { name: 'جسور', width: 20.5, length: 300, isSteel: true }
-    ];
+    
     const productMap = new Map();
     defaultProducts.forEach(p => {
         if (!productMap.has(p.name)) {
